@@ -47,8 +47,8 @@ pub const TOPICS: &[(&str, &str, &str)] = &[
     ),
     (
         "Langues et raccourcis",
-        "Paramètres > Langue : français ou anglais, changement immédiat. Pour ajouter une langue, copiez locales/en.json vers locales/de.json, traduisez les valeurs et placez le fichier dans le dossier locales près de l'exécutable ou dans les données utilisateur. Redémarrez puis sélectionnez de. Les clés manquantes reviennent au français. Ctrl+N : session ; Ctrl+F : recherche ; F1 : aide. Terminal : Ctrl+V coller, Ctrl+Shift+C copier, Ctrl+C interrompre, Shift+PageUp/PageDown historique.",
-        "Settings > Language switches French/English immediately. Add a language by copying locales/en.json to locales/de.json, translating values and placing it in the locales folder next to the executable or inside the user data directory. Restart and select de. Missing keys fall back to French. Ctrl+N: new session; Ctrl+F: search; F1: help. Terminal: Ctrl+V paste, Ctrl+Shift+C copy, Ctrl+C interrupt, Shift+PageUp/PageDown scrollback.",
+        "Paramètres > Langue permet de choisir parmi 12 langues : français, anglais, espagnol, italien, allemand, portugais du Brésil, japonais, chinois simplifié, coréen, arabe, hindi et indonésien. Les traductions et polices sont intégrées. Pour ajouter une langue, copiez locales/en.json, traduisez uniquement les valeurs et placez le fichier dans le dossier locales à côté de l’exécutable ou dans le dossier de données. Redémarrez puis sélectionnez la langue. Les clés manquantes restent en français. Ctrl+N : nouvelle session ; Ctrl+F : recherche ; F1 : aide.",
+        "Settings > Language offers 12 languages: French, English, Spanish, Italian, German, Brazilian Portuguese, Japanese, Simplified Chinese, Korean, Arabic, Hindi and Indonesian. Translations and fonts are bundled. To add a language, copy locales/en.json, translate only the values and place the file in the locales folder next to the executable or inside the data directory. Restart and select the language. Missing keys fall back to French. Ctrl+N: new session; Ctrl+F: search; F1: help.",
     ),
     (
         "Configurer les connexions",

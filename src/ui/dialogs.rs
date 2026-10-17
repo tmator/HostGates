@@ -50,8 +50,8 @@ impl HostGates {
                 egui::ScrollArea::vertical().max_height(560.0).show(ui, |ui| {
                 ui.heading(crate::i18n::tr("Langue"));
                 let previous=self.advanced.preferences.language.clone();
-                egui::ComboBox::from_id_salt("locale").selected_text(if previous.is_empty(){"fr"}else{&previous}).show_ui(ui,|ui|{
-                    for lang in crate::i18n::languages(){ui.selectable_value(&mut self.advanced.preferences.language,lang.clone(),lang);}
+                egui::ComboBox::from_id_salt("locale").selected_text(crate::i18n::language_name(&previous)).show_ui(ui,|ui|{
+                    for lang in crate::i18n::languages(){ui.selectable_value(&mut self.advanced.preferences.language,lang.clone(),crate::i18n::language_name(&lang));}
                 });
                 if previous!=self.advanced.preferences.language && let Err(e)=self.advanced.save(){self.error=Some(e.to_string());}
                 self.vault_settings(ui);ui.separator();

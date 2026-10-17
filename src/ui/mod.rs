@@ -7,6 +7,7 @@ pub fn locale_dir() -> std::path::PathBuf {
 mod dialogs;
 mod editor;
 mod exchange;
+mod fonts;
 mod help;
 mod sessions;
 mod sidebar;
@@ -57,6 +58,7 @@ pub struct HostGates {
 }
 impl HostGates {
     pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
+        fonts::install(&cc.egui_ctx, "fr");
         cc.egui_ctx.all_styles_mut(|style| {
             style.spacing.item_spacing = egui::vec2(7.0, 5.0);
             style.spacing.button_padding = egui::vec2(8.0, 4.0);
@@ -255,7 +257,9 @@ impl eframe::App for HostGates {
             self.advanced.last_activity = std::time::Instant::now();
         }
         self.auto_lock();
-        crate::i18n::set_language(&self.advanced.preferences.language);
+        if crate::i18n::set_language(&self.advanced.preferences.language) {
+            fonts::install(&ctx, &self.advanced.preferences.language);
+        }
         self.receive(&ctx);
         if !self.startup_checked
             && !self.busy

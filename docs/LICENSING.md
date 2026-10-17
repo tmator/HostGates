@@ -30,3 +30,5 @@ Les licences tierces continuent à s'appliquer à leurs composants ; la licence 
 - OpenSSH, mstsc, FreeRDP, TigerVNC et le navigateur sont des programmes externes, non distribués avec HostGates. Leur licence reste indépendante.
 
 L'inventaire doit être régénéré et les notices revérifiées lors d'un changement de dépendances. Ne pas inclure les bases de sessions personnelles, secrets, exports réels ou répertoires de travail privés dans une publication.
+
+Depuis 0.3.5, les polices Noto Sans CJK, Noto Sans Arabic et Noto Sans Devanagari sont embarquées sous SIL Open Font License 1.1. Les notices, licences et provenances figurent dans `assets/fonts/` et accompagnent les archives de distribution.

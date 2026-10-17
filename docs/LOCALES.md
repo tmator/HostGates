@@ -1,12 +1,11 @@
-# Ajouter une langue
+# Langues de HostGates
 
-Les traductions sont des dictionnaires JSON UTF-8 : la clé est le texte français de référence, la valeur est le texte traduit. `fr` et `en` sont disponibles ; l'anglais est embarqué dans le binaire. Le dossier `locales` du projet contient les catalogues complets.
+Paramètres > Langue propose français (`fr`), anglais (`en`), espagnol (`es`), italien (`it`), allemand (`de`), portugais du Brésil (`pt`), japonais (`ja`), chinois simplifié (`zh-CN`), coréen (`ko`), arabe (`ar`), hindi (`hi`) et indonésien (`id`). Les catalogues et polices sont intégrés au binaire et fonctionnent hors ligne.
 
-1. Copier `locales/en.json` vers `locales/de.json` (ou un autre code, par exemple `pt-BR`).
-2. Traduire les **valeurs**, conserver les clés et les paramètres `{count}`, `{}` à l'identique. Ne pas traduire les identifiants, chemins ou adresses contenus dans les paramètres.
-3. Placer le fichier dans `locales` à côté de l'exécutable, ou dans le sous-dossier `locales` des données utilisateur (chemin de la base visible dans Paramètres).
-4. Redémarrer, ouvrir Paramètres > Langue et choisir le code. Le choix est enregistré dans `preferences.json`.
+Les traductions sont des objets JSON UTF-8 : la clé française identifie le message, la valeur contient sa traduction. Ne traduisez pas les clés ni les paramètres entre accolades (`{count}`, `{}`, etc.). Conservez les noms de fichiers, chemins, protocoles et raccourcis techniques. Lancez `python scripts/check-locales.py` pour contrôler les catalogues distribués.
 
-Les catalogues utilisateur complètent ou remplacent les textes embarqués. Une clé absente revient au français. Les messages produits par les serveurs et les clients externes gardent leur propre langue. Les exemples de commandes ne sont pas traduits.
+Pour personnaliser une langue, placez son fichier dans `locales/` à côté de l'exécutable, ou dans le sous-dossier `locales/` du répertoire de données de l'application. Le catalogue intégré est chargé d'abord, puis le dossier de l'exécutable, puis celui des données utilisateur. Les fichiers personnalisés sont prioritaires ; les entrées absentes restent celles du catalogue intégré. Pour une langue nouvelle, les clés absentes restent en français.
 
-Pour ajouter du texte dans le code Rust : `crate::i18n::tr("Texte français")`, puis ajouter la clé aux catalogues. Pour un texte formaté, traduire le résultat complet et ajouter le modèle correspondant (exemple `{count} occurrence(s)`). Les modèles doivent contenir suffisamment de texte fixe pour éviter de traiter une adresse ou un nom utilisateur comme une phrase d'interface.
+Pour ajouter une langue, copiez `en.json` sous un nouveau code (`nl.json`, par exemple), traduisez les valeurs, puis redémarrez. Une modification sur disque est relue lors d'un changement de langue ou au prochain lancement. Le nom du fichier doit contenir uniquement des lettres ASCII, chiffres, tirets ou traits de soulignement.
+
+Les nouvelles traductions sont automatiques avec corrections ciblées, sans relecture native exhaustive. Voir [les notes 0.3.5](RELEASE_0.3.5.md) pour les limites du rendu arabe bidirectionnel. Les traductions ne modifient ni les commandes envoyées, ni les adresses, ni les secrets.

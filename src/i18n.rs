@@ -8,17 +8,44 @@ struct Catalog {
     strings: BTreeMap<String, String>,
 }
 static CATALOG: OnceLock<RwLock<Catalog>> = OnceLock::new();
-pub fn set_language(language: &str) {
+pub const BUILTIN_LANGUAGES: &[(&str, &str, &str)] = &[
+    ("fr", "Français", include_str!("../locales/fr.json")),
+    ("en", "English", include_str!("../locales/en.json")),
+    ("es", "Español", include_str!("../locales/es.json")),
+    ("it", "Italiano", include_str!("../locales/it.json")),
+    ("de", "Deutsch", include_str!("../locales/de.json")),
+    (
+        "pt",
+        "Português (Brasil)",
+        include_str!("../locales/pt.json"),
+    ),
+    ("ja", "日本語", include_str!("../locales/ja.json")),
+    ("zh-CN", "简体中文", include_str!("../locales/zh-CN.json")),
+    ("ko", "한국어", include_str!("../locales/ko.json")),
+    ("ar", "العربية", include_str!("../locales/ar.json")),
+    ("hi", "हिन्दी", include_str!("../locales/hi.json")),
+    ("id", "Bahasa Indonesia", include_str!("../locales/id.json")),
+];
+
+pub fn language_name(code: &str) -> &str {
+    let code = if code.is_empty() { "fr" } else { code };
+    BUILTIN_LANGUAGES
+        .iter()
+        .find(|entry| entry.0 == code)
+        .map_or(code, |entry| entry.1)
+}
+
+pub fn set_language(language: &str) -> bool {
+    let language = if language.is_empty() { "fr" } else { language };
     let catalog = CATALOG.get_or_init(Default::default);
     if let Ok(mut c) = catalog.write() {
         if c.language == language {
-            return;
+            return false;
         }
-        let embedded = if language == "en" {
-            include_str!("../locales/en.json")
-        } else {
-            "{}"
-        };
+        let embedded = BUILTIN_LANGUAGES
+            .iter()
+            .find(|entry| entry.0 == language)
+            .map_or("{}", |entry| entry.2);
         let mut strings: BTreeMap<String, String> =
             serde_json::from_str(embedded).unwrap_or_default();
         if language
@@ -45,7 +72,9 @@ pub fn set_language(language: &str) {
             language: language.into(),
             strings,
         };
+        return true;
     }
+    false
 }
 pub fn tr(text: &str) -> String {
     let Some(catalog) = CATALOG.get().and_then(|c| c.read().ok()) else {
@@ -121,7 +150,10 @@ fn translate_template(source: &str, target: &str, text: &str) -> Option<String> 
     Some(output)
 }
 pub fn languages() -> Vec<String> {
-    let mut languages = vec!["fr".into(), "en".into()];
+    let mut languages: Vec<String> = BUILTIN_LANGUAGES
+        .iter()
+        .map(|entry| entry.0.into())
+        .collect();
     for folder in [
         std::env::current_exe()
             .ok()
@@ -149,6 +181,25 @@ pub fn languages() -> Vec<String> {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn embedded_catalogs_preserve_session_names_and_template_values() {
+        let source = "{count} résultat(s) — tous les dossiers";
+        for (code, _, json) in super::BUILTIN_LANGUAGES {
+            let catalog: super::BTreeMap<String, String> =
+                serde_json::from_str(json).expect("valid catalog");
+            let target = catalog.get(source).expect("translated result count");
+            let output =
+                super::translate_template(source, target, "12 résultat(s) — tous les dossiers")
+                    .expect("template matches");
+            assert!(output.contains("12"), "{code}: {output}");
+            assert!(!output.contains('{'), "{code}");
+            assert!(catalog.contains_key("Déverrouiller le coffre"), "{code}");
+        }
+        assert_eq!(super::language_name(""), "Français");
+        assert_eq!(super::language_name("ja"), "日本語");
+        assert_eq!(super::language_name("custom"), "custom");
+    }
+
     #[test]
     fn templates_preserve_values_and_require_full_match() {
         assert_eq!(
