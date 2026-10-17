@@ -1,0 +1,70 @@
+target/
+.tools/
+*.db
+*.db-shm
+*.db-wal
+*.log
+test-results/
+tests/fixtures/private/
+vault.json
+vault.enabled
+preferences.json
+instance.lock
+
+# DonnÃ©es locales, exports rÃ©els et sauvegardes
+/data/
+/private/
+/exports/
+/backups/
+*.sqlite
+*.sqlite3
+*.sqlite-*
+*.mxtsessions
+*.moba
+*.rdp
+# Fixtures synthÃ©tiques nÃ©cessaires aux tests
+!tests/fixtures/*.mxtsessions
+
+# Secrets et configurations personnelles
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.ppk
+*.p12
+*.pfx
+id_rsa*
+id_ed25519*
+id_ecdsa*
+.ssh/
+.aws/
+.codex/
+.agents/
+
+# Binaires : publier dans GitHub Releases, pas dans les sources
+*.exe
+*.dll
+*.pdb
+*.msi
+*.AppImage
+*.deb
+
+# Ã‰diteurs, Python et fichiers du systÃ¨me
+.idea/
+.vscode/
+__pycache__/
+*.py[cod]
+*.swp
+*.tmp
+Thumbs.db
+Desktop.ini
+.DS_Store
+
+# Cargo.lock est volontairement conservÃ© pour des builds reproductibles.
+
+# Documents de travail et outils propres au poste
+/docs/REQUIREMENTS.md
+/docs/STATUS.md
+/docs/GITHUB.md
+/scripts/cargo-local.ps1

@@ -1,0 +1,45 @@
+[package]
+name = "hostgates"
+version = "0.3.4"
+edition = "2024"
+rust-version = "1.95"
+description = "Gestionnaire natif de connexions distantes Windows et Linux"
+license = "MIT"
+
+[dependencies]
+eframe = { version = "0.36.2", default-features = false, features = ["default_fonts", "glow", "wayland", "x11"] }
+serde = { version = "1", features = ["derive"] }
+rusqlite = { version = "0.38", features = ["bundled"] }
+uuid = { version = "1", features = ["v4", "serde"] }
+thiserror = "2"
+zeroize = { version = "1", features = ["serde"] }
+keyring-core = "1"
+directories = "6"
+encoding_rs = "0.8"
+csv = "1"
+url = "2"
+webbrowser = "1"
+rfd = "0.17"
+tempfile = "3"
+portable-pty = "0.9"
+vt100 = "0.16"
+serde_json = "1"
+argon2 = { version = "0.5", features = ["zeroize"] }
+aes-gcm-siv = "0.11"
+rand_core = { version = "0.6", features = ["getrandom"] }
+ssh2 = { version = "0.9", features = ["openssl-on-win32", "vendored-openssl"] }
+des = { version = "0.8", features = ["zeroize"] }
+
+[target.'cfg(windows)'.dependencies]
+windows-native-keyring-store = "1"
+windows-sys = { version = "0.61", features = ["Win32_Security_Cryptography", "Win32_Security_Authorization", "Win32_System_Threading", "Win32_System_Memory"] }
+
+[target.'cfg(target_os = "linux")'.dependencies]
+dbus-secret-service-keyring-store = { version = "1", features = ["crypto-rust"] }
+
+[profile.release]
+lto = "thin"
+strip = true
+
+[lints.clippy]
+unwrap_used = "warn"

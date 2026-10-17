@@ -1,0 +1,189 @@
+HOSTGATES — SÉCURITÉ
+Version de travail du 17 octobre 2026
+
+PORTÉE
+Ce document décrit le code livré, pas une certification. Aucun audit indépendant
+ni qualification ANSSI/FIPS n'a été réalisé. « Top niveau sécurité » ne serait
+donc pas une garantie justifiée. Les primitives cryptographiques proviennent de
+RustCrypto ; le protocole SSH est implémenté par libssh2, pas réinventé ici.
+
+COFFRE AVEC MOT DE PASSE MAÎTRE
+Activation : Paramètres > Coffre et mot de passe maître > Créer le coffre chiffré.
+Le mot de passe doit avoir au moins 12 caractères. Utiliser une phrase longue,
+unique, générée ou conservée dans un gestionnaire de mots de passe fiable.
+
+- Dérivation : Argon2id version 0x13, mémoire 65 536 Kio (64 Mio), 3 passes,
+  parallélisme 1, sortie 32 octets. Sel aléatoire de 16 octets.
+- Chiffrement authentifié : AES-256-GCM-SIV, nonce aléatoire de 12 octets pour
+  chaque écriture, tag d'authentification de 16 octets. Le format/version et les
+  paramètres fixes sont liés au chiffré par des données associées (AAD).
+- Aléa : OsRng/rand_core, alimenté par le générateur du système d'exploitation.
+- Le fichier vault.json contient version, sel, nonce et contenu chiffré.
+  L'ensemble de la table des identifiants et secrets est chiffré/authentifié.
+  Aucun mot de passe maître, clé dérivée ou vérificateur séparé n'est persisté.
+- Écriture dans un fichier temporaire du même répertoire, synchronisation puis
+  remplacement atomique. Aucun fichier temporaire en clair pour les secrets.
+- Au changement du mot de passe maître, nouveau sel, nouvelle clé et nouveau nonce.
+- Un mot de passe incorrect ou une altération du chiffré refuse l'ouverture.
+  Il n'y a pas de remise à zéro permettant de récupérer les secrets perdus.
+- Le marqueur vault.enabled évite un retour implicite au coffre système si le
+  fichier chiffré a été perdu. Ne pas supprimer ce marqueur pour déverrouiller.
+
+La clé dérivée reste en mémoire tant que le coffre est déverrouillé. Les buffers
+possédés de secrets et la clé utilisent zeroize/Zeroizing. Les copies internes
+des bibliothèques, du rendu graphique, du système, des fichiers d'échange, des
+crash dumps et des allocateurs ne sont pas toutes maîtrisées. La mémoire n'est
+pas verrouillée avec mlock/VirtualLock. Un administrateur ou un logiciel malveillant
+exécuté sous le même compte peut compromettre une session déverrouillée.
+
+VERROUILLAGE ET MIGRATION
+Le coffre maître commence verrouillé à chaque lancement. Verrouiller et fermer
+les connexions ferme les onglets et demande l'arrêt des transferts/tunnels ; les
+opérations réseau en cours peuvent attendre leur délai d'expiration avant de
+libérer leurs derniers buffers. Le même verrouillage s'applique après 10 minutes
+sans événement d'entrée dans l'application. Cela peut interrompre un travail
+distant ; une fermeture de terminal ne garantit pas l'arrêt de tous ses processus
+distants. Il n'y a pas de détection immédiate du verrouillage Windows/Linux.
+
+Avant activation du mot de passe maître, les secrets restent dans Windows
+Credential Manager (protection du compte Windows) ou Secret Service Linux
+(protection dépendant du fournisseur, par exemple GNOME Keyring/KWallet).
+HostGates ne peut pas annoncer un algorithme unique pour ces coffres système.
+Ils ne sont pas équivalents au coffre maître indépendant.
+
+L'activation lit les secrets référencés, écrit d'abord leur copie chiffrée, puis
+supprime les anciennes entrées du coffre système. Si une suppression échoue,
+l'erreur le signale : le nouveau coffre existe, mais les anciennes copies doivent
+être supprimées dans le gestionnaire d'identifiants de l'OS après vérification.
+Les anciennes sauvegardes et instantanés peuvent aussi conserver ces copies.
+Fermer les anciennes versions de HostGates avant migration. Les nouvelles
+instances prennent un verrou exclusif sur instance.lock pour éviter les écritures
+concurrentes ; les anciennes versions ne connaissent pas ce verrou.
+
+Les mots de passe enregistrés sont réutilisés par le SSH intégré et ses services
+SFTP/tunnel. Le mot de passe ou la phrase secrète de clé peut rester dans un
+buffer Zeroizing pendant la vie du volet SFTP ou du tunnel, car des connexions
+additionnelles sont nécessaires. Aucun secret n'est passé dans les arguments de
+processus ou dans une variable d'environnement. Le mode OpenSSH externe conserve
+son invite. La transmission aux clients RDP/VNC est décrite ci-dessous.
+
+SSH, SFTP ET TUNNELS
+La clé serveur est contrôlée AVANT de transmettre les identifiants : correspondance
+avec le known_hosts OpenSSH du profil ou empreinte SHA-256 épinglée dans les
+préférences. Une nouvelle clé exige une acceptation explicite après vérification
+indépendante. Une clé différente d'une clé connue est bloquée ; la remplacer
+nécessite une modification consciente des options après vérification.
+Les empreintes affichées par le mode intégré sont SHA-256 en hexadécimal,
+contrairement au format base64 SHA256: souvent utilisé par OpenSSH.
+
+Le mode SSH intégré n'autorise que des échanges SHA-256/SHA-512/ECDH/Curve25519,
+des clés serveur Ed25519/ECDSA/RSA-SHA2 et des chiffrements AES-GCM/AES-CTR ou
+ChaCha20-Poly1305 lorsqu'ils sont disponibles dans le backend. Les MAC séparés
+autorisés sont HMAC-SHA2, avec ETM préféré. Aucun repli vers DSA, RSA-SHA1,
+DH-group1, CBC ou HMAC-SHA1 dans ce mode. Les algorithmes effectifs dépendent de
+libssh2, du backend OpenSSL embarqué et du serveur. Ce n'est pas une suite
+post-quantique. Le mode OpenSSH externe suit la configuration de l'utilisateur.
+
+Les fichiers sont transférés par SFTP, sans construction de commandes shell.
+L'envoi et le téléchargement de dossiers sont récursifs (limite 64 niveaux).
+Les noms spéciaux/dangereux sont rejetés, ainsi que les liens symboliques et
+fichiers spéciaux. Les fichiers/dossiers existants ne sont pas écrasés ; une
+interruption peut laisser des fichiers partiels. Choisir un répertoire local de
+confiance et retirer les copies partielles avant de réessayer.
+
+Les tunnels écoutent uniquement sur 127.0.0.1, port éphémère, maximum 32 connexions
+simultanées par tunnel. Un seul saut SSH est pris en charge. Les processus du même
+poste peuvent atteindre le port local : ce n'est pas une isolation entre comptes.
+La passerelle doit autoriser le transfert TCP vers la cible. Fermer l'onglet arrête
+l'écoute et les flux. Les tunnels ne sont jamais démarrés à l'import ou au lancement.
+
+Le Web via tunnel utilise une URL locale. Le navigateur garde ses contrôles TLS ;
+aucune exception de certificat n'est créée. Un site HTTPS dont le certificat ne
+couvre pas l'adresse locale, les hôtes virtuels ou les redirections peuvent ne pas
+fonctionner ainsi. Il faut une configuration DNS/proxy adaptée hors de cette
+fonction pour préserver un nom de domaine ; ne pas désactiver la validation TLS.
+
+COMMANDES MULTIPLES
+Les destinataires sont sélectionnés explicitement. Le bouton d'exécution exige
+la confirmation des commandes et destinataires. Chaque ligne envoie Entrée au
+terminal ; il ne s'agit pas d'un ordonnanceur attendant la fin de chaque commande.
+Ne pas sélectionner une invite de mot de passe, une application interactive ou
+un terminal non authentifié. Les résultats restent dans chaque terminal.
+
+DONNÉES ET LIMITES
+SQLite, preferences.json et les exports de sessions ne sont pas chiffrés : noms,
+adresses, utilisateurs, descriptions, chemins de clés et empreintes y sont visibles.
+Les exports excluent les secrets ; les clés privées restent dans leurs fichiers.
+Le coffre n'empêche pas le retour malveillant à une ancienne sauvegarde valide
+(rollback), la suppression des fichiers ou la modification du programme lui-même.
+Protéger le poste, ses permissions, ses sauvegardes et le chiffrement du disque.
+Sous Unix, le répertoire des données est limité à 0700. Sous Windows, la protection
+des fichiers dépend des ACL héritées du répertoire utilisateur.
+
+Sauvegarder remotehub.db, vault.json, vault.enabled et preferences.json application
+fermée. Garder le mot de passe maître séparément. Les sauvegardes antérieures à un
+changement de mot de passe s'ouvrent toujours avec leur ancien mot de passe.
+Les catalogues de langues sont des fichiers JSON de texte, jamais du code exécuté.
+
+RÉFÉRENCES
+Argon2 : https://www.rfc-editor.org/rfc/rfc9106.html
+AES-GCM-SIV : https://www.rfc-editor.org/rfc/rfc8452.html
+Implémentations : https://docs.rs/argon2/0.5.3/argon2/
+https://docs.rs/aes-gcm-siv/0.11.1/aes_gcm_siv/
+SSH/SFTP : https://docs.rs/ssh2/0.9.6/ssh2/
+Les paramètres ci-dessus décrivent HostGates ; ils ne constituent pas une
+affirmation de conformité à un profil de certification.
+
+TRANSMISSION AUX CLIENTS EXTERNES (0.3.1)
+Les quatre types SSH/RDP/VNC/Web peuvent enregistrer leur secret dans le coffre.
+Le formulaire de session permet de l'enregistrer ou le remplacer. Décocher cette
+option conserve le secret existant ; « Mot de passe… » permet de le supprimer.
+
+MSTSC Windows : fichier .rdp temporaire UTF-16 contenant password 51:b, chiffré
+par Windows DPAPI pour le compte courant. Le mot de passe ne figure pas dans les
+arguments ; seul le chemin du fichier est transmis. Aucune entrée TERMSRV du
+Gestionnaire d'identifiants n'est créée ou remplacée. Les politiques Windows ou
+serveur peuvent imposer une nouvelle saisie malgré le mot de passe fourni.
+
+FreeRDP Linux : /from-stdin:force avec un pipe d'entrée standard fermé après envoi.
+Pas de /p:secret dans les arguments. Renseigner l'utilisateur dans la session.
+Les mots de passe contenant NUL/CR/LF sont refusés pour ce canal. Les clients
+nécessitant une saisie interactive supplémentaire peuvent utiliser l'option
+« Saisir le mot de passe dans le client externe (RDP / VNC) ».
+
+VNC : client compatible TigerVNC -PasswordFile, authentification VncAuth classique.
+Le fichier contient huit octets obfusqués par DES selon le format VNC. Ce format
+est REVERSIBLE et ne constitue pas une protection cryptographique du secret.
+Il est limité à huit caractères ASCII ; aucun mot de passe plus long n'est tronqué
+silencieusement. Les autres clients/modes utilisent la saisie manuelle optionnelle.
+
+Les fichiers temporaires RDP/VNC ont un nom aléatoire ; accès propriétaire seul
+(0600 sous Unix, DACL explicite non héritée sous Windows), avant écriture. Ils
+restent jusqu'à fermeture de l'onglet ou de l'application, car certains clients
+transfèrent la connexion à un autre processus. Un arrêt brutal peut laisser un
+fichier hostgates-auth-* dans le dossier temporaire utilisateur : supprimer ces
+fichiers après fermeture des clients. Pas de garantie d'effacement physique sur
+SSD. Les processus du même compte et les administrateurs restent dans la frontière
+de confiance. Pour éviter toute copie de secret VNC sur disque, activer la saisie
+manuelle dans les options de la session. Le coffre maître reste AES-256-GCM-SIV ;
+le format VNC n'est utilisé que pour la remise au client.
+
+Web : aucune injection générique dans un navigateur externe. Le secret est
+conservable dans le coffre, mais n'est jamais ajouté à l'URL (historique/journaux).
+Les formulaires, SSO et MFA restent à la charge du navigateur et du site.
+
+Références :
+https://learn.microsoft.com/en-us/windows/win32/api/dpapi/nf-dpapi-cryptprotectdata
+https://tigervnc.org/doc/vncviewer.html
+https://tigervnc.org/doc/vncpasswd.html
+https://github.com/FreeRDP/FreeRDP/blob/master/client/common/cmdline.c
+
+MISE À JOUR 0.3.4
+Déverrouillage proposé au lancement uniquement si un coffre maître est configuré.
+Échap laisse le coffre verrouillé et détruit le tampon de saisie. Les confirmations
+de clé serveur ne sont jamais acceptées par le raccourci Entrée.
+Les passerelles saisies manuellement sont des sessions SSH ordinaires : leur secret
+utilise le même coffre, les mêmes références UUID et la même migration vers le
+coffre maître. Aucun secret de passerelle dans preferences.json. Un échec de stockage
+du secret annule la création de cette nouvelle session. Le tunnel contrôle la clé
+hôte de la passerelle avant authentification, séparément de la clé de la cible SSH.
