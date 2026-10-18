@@ -1,6 +1,6 @@
 # Compiler et lancer HostGates sous Linux
 
-Ce guide utilise Ubuntu/Debian. Exécutez les commandes dans un terminal Linux. La compilation et l’exécution Linux restent à valider : les tests locaux ont jusqu’ici été effectués sous Windows.
+Ce guide utilise Ubuntu/Debian. Exécutez les commandes dans un terminal Linux. Des paquets DEB/RPM et leur procédure de construction sont décrits dans [LINUX_PACKAGES.md](LINUX_PACKAGES.md).
 
 ## 1. Copier le projet
 
@@ -8,7 +8,7 @@ Copiez le dossier du projet Windows vers Linux, par exemple dans `~/Documents/Ho
 
 Ne copiez pas `.tools` et `target` : ils contiennent la chaîne de compilation et les fichiers générés sous Windows.
 
-Conservez les sources et fichiers du projet, notamment `Cargo.toml`, `Cargo.lock`, `src/`, `locales/`, `migrations/`, `docs/`, `tests/` et `scripts/`. Le dossier `docs/` est nécessaire car certains textes d’aide sont intégrés lors de la compilation.
+Conservez les sources et fichiers du projet, notamment `Cargo.toml`, `Cargo.lock`, `src/`, `assets/`, `locales/`, `migrations/`, `docs/`, `tests/` et `scripts/`. Le dossier `docs/` est nécessaire car certains textes d’aide sont intégrés lors de la compilation.
 
 ## 2. Installer les dépendances de compilation
 

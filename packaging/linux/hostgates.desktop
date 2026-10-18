@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=HostGates
+Comment=SSH, RDP, VNC and web connection manager
+Comment[fr]=Gestionnaire de connexions SSH, RDP, VNC et Web
+Exec=hostgates
+Icon=hostgates
+Terminal=false
+Categories=Network;RemoteAccess;
+Keywords=SSH;RDP;VNC;SFTP;terminal;
+StartupWMClass=hostgates

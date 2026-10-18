@@ -38,7 +38,9 @@ Les dix nouvelles traductions sont automatiques avec corrections ciblées. Le re
 
 ## Télécharger
 
-La [release 0.3.5](https://github.com/tmator/HostGates/releases/tag/v0.3.5) fournit l'exécutable Windows x64, une archive avec la documentation et les licences, ainsi que les empreintes SHA-256. Les instructions de [compilation Windows](docs/BUILD_WINDOWS.md) et [compilation Linux](docs/BUILD_LINUX.md) sont disponibles dans la documentation.
+La [release 0.3.5](https://github.com/tmator/HostGates/releases/tag/v0.3.5) fournit l'exécutable Windows x64, son archive avec documentation et licences, ainsi que les paquets Linux **DEB et RPM pour x86-64**, accompagnés de leurs empreintes SHA-256. Les instructions de [compilation Windows](docs/BUILD_WINDOWS.md) et [compilation Linux](docs/BUILD_LINUX.md) sont disponibles dans la documentation.
+
+Pour Linux : **Debian 12+ / Ubuntu 22.04+** (DEB), **RHEL / Rocky / AlmaLinux 9+ et Fedora récent** (RPM). Installation et démarrage graphique de contrôle validés en conteneurs sur Debian 12, Ubuntu 22.04.5, Rocky 9.8 et Fedora 44. RHEL et AlmaLinux restent des cibles de compatibilité sans test direct. Voir le [guide des paquets Linux](docs/LINUX_PACKAGES.md).
 
 ## Licence
 
