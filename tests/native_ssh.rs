@@ -119,8 +119,9 @@ fn native_terminal_sftp_roundtrip_and_tunnel() {
     });
     let tunnel = Tunnel::start(auth, "127.0.0.1".into(), echo_port).expect("tunnel");
     let local_port = tunnel.port;
+    let local_host = tunnel.host.clone();
     let mut stream =
-        std::net::TcpStream::connect(("127.0.0.1", local_port)).expect("connect tunnel");
+        std::net::TcpStream::connect((local_host.as_str(), local_port)).expect("connect tunnel");
     stream
         .set_read_timeout(Some(Duration::from_secs(15)))
         .expect("timeout");
@@ -133,7 +134,7 @@ fn native_terminal_sftp_roundtrip_and_tunnel() {
     assert_eq!(bytes, b"FORWARDED");
     echo.join().expect("echo thread");
     drop(tunnel);
-    wait(|| std::net::TcpStream::connect(("127.0.0.1", local_port)).is_err());
+    wait(|| std::net::TcpStream::connect((local_host.as_str(), local_port)).is_err());
     terminal.stop();
 }
 

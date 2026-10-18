@@ -44,6 +44,19 @@ impl Database {
     }
     fn import_inner(&mut self, preview: &Preview) -> Result<ImportReport> {
         let mut report = ImportReport::default();
+        let snapshot = self.snapshot()?;
+        let mut sessions = std::collections::HashMap::<_, Vec<String>>::new();
+        for session in snapshot.sessions {
+            sessions
+                .entry(identity(&session.data))
+                .or_default()
+                .push(session.uuid);
+        }
+        let mut folders: std::collections::HashMap<_, _> = snapshot
+            .folders
+            .into_iter()
+            .map(|f| ((f.data.parent_id, f.data.name), f.uuid))
+            .collect();
         for row in &preview.rows {
             let Some(mut data) = row.data.clone() else {
                 if ["SSH", "RDP", "VNC", "WEB", "?"].contains(&row.kind.as_str()) {
@@ -57,17 +70,15 @@ impl Database {
                 report.skipped += 1;
                 continue;
             }
-            let snapshot = self.snapshot()?;
-            let duplicates: Vec<_> = snapshot
-                .sessions
-                .iter()
-                .filter(|s| identity(&s.data) == identity(&data))
-                .collect();
-            if !duplicates.is_empty() && row.policy == DuplicatePolicy::Skip {
+            let key = identity(&data);
+            let duplicates = sessions.get(&key);
+            let duplicate_count = duplicates.map_or(0, Vec::len);
+            let first_duplicate = duplicates.and_then(|ids| ids.first()).cloned();
+            if duplicate_count != 0 && row.policy == DuplicatePolicy::Skip {
                 report.skipped += 1;
                 continue;
             }
-            if duplicates.len() > 1 && row.policy == DuplicatePolicy::Replace {
+            if duplicate_count > 1 && row.policy == DuplicatePolicy::Replace {
                 return Err(AppError::Validation(format!(
                     "Plusieurs sessions correspondent à « {} ». Choisissez Ignorer ou Importer quand même.",
                     data.name
@@ -75,33 +86,32 @@ impl Database {
             }
             let mut parent = None;
             for part in folder_parts(&row.folder)? {
-                let folders = self.snapshot()?.folders;
-                parent = Some(
-                    match folders
-                        .iter()
-                        .find(|f| f.data.name == part && f.data.parent_id == parent)
-                    {
-                        Some(f) => f.uuid.clone(),
-                        None => self.save_folder(
-                            None,
-                            &FolderInput {
-                                name: part.into(),
-                                parent_id: parent,
-                                sort_order: 0,
-                                color: "#7195ff".into(),
-                                icon: "folder".into(),
-                            },
-                        )?,
-                    },
-                );
+                let folder_key = (parent.clone(), part.to_owned());
+                let id = if let Some(id) = folders.get(&folder_key) {
+                    id.clone()
+                } else {
+                    // folder_parts already validates names/depth. These are fresh children,
+                    // never subtree moves, so no full-tree cycle scan is needed.
+                    let id = uuid::Uuid::new_v4().to_string();
+                    self.conn.execute(
+                        "INSERT INTO folders(uuid,name,parent_id,sort_order,color,icon) VALUES (?,?,?,0,'#7195ff','folder')",
+                        params![id, part.trim(), parent],
+                    )?;
+                    folders.insert(folder_key, id.clone());
+                    id
+                };
+                parent = Some(id);
             }
             data.folder_id = parent;
             let replace = if row.policy == DuplicatePolicy::Replace {
-                duplicates.first().map(|s| s.uuid.as_str())
+                first_duplicate.as_deref()
             } else {
                 None
             };
-            self.save_session(replace, &data)?;
+            let id = self.save_session(replace, &data)?;
+            if replace.is_none() {
+                sessions.entry(key).or_default().push(id);
+            }
             if replace.is_some() {
                 report.replaced += 1;
             }

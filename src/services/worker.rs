@@ -64,12 +64,26 @@ impl Worker {
                     .or_else(|| std::env::var_os("REMOTEHUB_DATA_DIR"))
                     .map(PathBuf::from)
                     .unwrap_or_else(|| dirs.data_local_dir().to_owned());
+                #[cfg(unix)]
+                let existed = data_dir.exists();
                 std::fs::create_dir_all(&data_dir).map_err(|_| AppError::Database)?;
                 #[cfg(unix)]
                 {
                     use std::os::unix::fs::PermissionsExt;
-                    std::fs::set_permissions(&data_dir, std::fs::Permissions::from_mode(0o700))
-                        .map_err(|_| AppError::Database)?;
+                    if existed {
+                        if std::fs::metadata(&data_dir)
+                            .map_err(|_| AppError::Database)?
+                            .permissions()
+                            .mode()
+                            & 0o077
+                            != 0
+                        {
+                            return Err(AppError::Operation("Le dossier de données doit être privé (permissions 0700). Choisissez un dossier dédié à HostGates.".into()));
+                        }
+                    } else {
+                        std::fs::set_permissions(&data_dir, std::fs::Permissions::from_mode(0o700))
+                            .map_err(|_| AppError::Database)?;
+                    }
                 }
                 let path = data_dir.join("remotehub.db");
                 let instance = std::fs::OpenOptions::new()

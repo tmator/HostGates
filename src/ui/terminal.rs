@@ -259,6 +259,7 @@ impl TerminalView {
                         term.write(vec![24]);
                     }
                     Event::Paste(text) => {
+                        let text = sanitized_paste(&text);
                         let bytes = if term.parser.screen().bracketed_paste() {
                             format!("\x1b[200~{text}\x1b[201~").into_bytes()
                         } else {
@@ -386,5 +387,21 @@ impl TerminalView {
             }
         }
         out
+    }
+}
+
+fn sanitized_paste(text: &str) -> String {
+    text.chars()
+        .filter(|c| !c.is_control() || matches!(c, '\t' | '\n' | '\r'))
+        .collect()
+}
+#[cfg(test)]
+mod paste_security_tests {
+    #[test]
+    fn clipboard_cannot_close_bracketed_paste_or_send_controls() {
+        assert_eq!(
+            super::sanitized_paste("a\x1b[201~\x03\u{009b}b\n\t"),
+            "a[201~b\n\t"
+        );
     }
 }

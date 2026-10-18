@@ -172,14 +172,17 @@ pub fn export(snapshot: &Snapshot, ids: &[String], format: ExportFormat) -> Resu
                 .map_err(|_| AppError::Database)?;
             for s in sessions {
                 writer
-                    .write_record([
-                        folder_path(s.data.folder_id.as_deref(), snapshot),
-                        s.data.name.clone(),
-                        s.data.protocol.as_str().into(),
-                        s.data.hostname.clone(),
-                        s.data.username.clone(),
-                        s.data.port.to_string(),
-                    ])
+                    .write_record(
+                        [
+                            folder_path(s.data.folder_id.as_deref(), snapshot),
+                            s.data.name.clone(),
+                            s.data.protocol.as_str().into(),
+                            s.data.hostname.clone(),
+                            s.data.username.clone(),
+                            s.data.port.to_string(),
+                        ]
+                        .map(|value| spreadsheet_cell(&value)),
+                    )
                     .map_err(|_| AppError::Database)?;
             }
             writer
@@ -268,4 +271,24 @@ pub fn write_atomic(path: &Path, bytes: &[u8]) -> Result<()> {
         )
     })?;
     Ok(())
+}
+
+// CSV quoting does not prevent spreadsheet formula evaluation.
+fn spreadsheet_cell(value: &str) -> String {
+    if value.trim_start().starts_with(['=', '+', '-', '@']) || value.starts_with(['\t', '\r', '\n'])
+    {
+        format!("'{value}")
+    } else {
+        value.to_owned()
+    }
+}
+#[cfg(test)]
+mod security_tests {
+    #[test]
+    fn formulas_are_text() {
+        for value in ["=1+1", "+CMD", "-1", "@SUM(A1)", "  =1", "\tfoo"] {
+            assert!(super::spreadsheet_cell(value).starts_with('\''));
+        }
+        assert_eq!(super::spreadsheet_cell("server"), "server");
+    }
 }

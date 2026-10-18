@@ -59,6 +59,10 @@ impl RdpSession {
         #[cfg(not(windows))]
         {
             use std::io::Write;
+            // Without /d FreeRDP may consume the password as the domain.
+            if s.domain.trim().is_empty() {
+                return Err(AppError::Validation("FreeRDP : renseignez explicitement le domaine avant de transmettre un mot de passe enregistré, ou utilisez une authentification manuelle.".into()));
+            }
             if password.contains(['\r', '\n', '\0']) {
                 return Err(AppError::Validation("FreeRDP ne peut pas recevoir ce mot de passe par entrée standard (caractère de contrôle).".into()));
             }

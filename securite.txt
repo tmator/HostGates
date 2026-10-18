@@ -187,3 +187,35 @@ utilise le même coffre, les mêmes références UUID et la même migration vers
 coffre maître. Aucun secret de passerelle dans preferences.json. Un échec de stockage
 du secret annule la création de cette nouvelle session. Le tunnel contrôle la clé
 hôte de la passerelle avant authentification, séparément de la clé de la cible SSH.
+
+
+CORRECTIFS DE REVUE — 18 octobre 2026
+- Le collage retire ESC et les contrôles C0/C1 sauf tabulation et fins de ligne.
+  Sans bracketed paste, les fins de ligne peuvent toujours exécuter des commandes.
+- FreeRDP : transmission automatique refusée sans domaine explicite. Utilisez
+  l'authentification manuelle si le serveur n'a pas de domaine approprié.
+- La case de sauvegarde lors d'une connexion SSH n'enregistre le secret qu'après
+  authentification réussie. L'enregistrement explicite dans l'éditeur reste possible.
+- Une empreinte dans preferences.json ne contourne plus un conflit known_hosts.
+  preferences.json (empreintes, passerelles) n'est PAS authentifié par le coffre.
+  Protégez le dossier de données : un attaquant ayant accès en écriture au compte
+  peut encore modifier des cibles et la confiance initiale. Le coffre protège les
+  secrets au repos, pas l'intégrité de toute la configuration.
+- Chaque tunnel écoute sur une adresse 127.x aléatoire distincte, sans repli vers
+  127.0.0.1 si la liaison échoue. Cela sépare les cookies entre tunnels, sans
+  authentifier les clients locaux. Les autres comptes/processus locaux et les
+  requêtes déclenchées par un navigateur peuvent accéder au port pendant sa vie.
+  Ne pas utiliser ces tunnels comme frontière de sécurité sur un poste partagé.
+- Les chemins PATH relatifs ou vides sont ignorés. Sous Unix, un dossier existant
+  trop accessible est refusé plutôt que chmodé ; choisissez un dossier dédié 0700.
+- Export CSV : les cellules susceptibles d'être des formules reçoivent une
+  apostrophe initiale. Cette protection peut modifier leur valeur au réimport.
+- Téléchargements : limite cumulative 10 Gio / 10 000 entrées par opération,
+  profondeur maximale 64 ; un arrêt peut laisser des fichiers partiels. Les noms
+  non représentables sont omis de la liste ; un téléchargement récursif les refuse.
+- Le verrouillage automatique concerne uniquement le coffre à mot de passe maître,
+  pas le stockage système seul. Les threads SSH/SFTP/tunnels peuvent conserver des
+  copies des secrets jusqu'à leur arrêt effectif, après fermeture/verrouillage UI.
+- VNC : DES à clé fixe est une obfuscation réversible, pas un chiffrement sûr.
+- Supprimer ensemble vault.json ET vault.enabled réactive le stockage système pour
+  les nouveaux secrets. Le mot de passe maître ne protège pas cette réinitialisation.

@@ -255,9 +255,6 @@ impl HostGates {
         } else {
             None
         };
-        if login.save && !password.is_empty() {
-            self.send(Action::SetSecret(s.uuid.clone(), password.clone()));
-        }
         self.advanced
             .preferences
             .sessions
@@ -287,13 +284,13 @@ impl HostGates {
                         .map_err(|e| AppError::Operation(format!("Passerelle SSH : {e}")))?;
                     if s.data.protocol == crate::models::Protocol::WEB {
                         let mut u = crate::connections::web::validated_url(&s.data.hostname)?;
-                        u.set_host(Some("127.0.0.1"))
+                        u.set_host(Some(&t.host))
                             .map_err(|e| AppError::Operation(e.to_string()))?;
                         u.set_port(Some(t.port))
                             .map_err(|_| AppError::Validation("Port URL invalide.".into()))?;
                         target.data.hostname = u.to_string();
                     } else {
-                        target.data.hostname = "127.0.0.1".into();
+                        target.data.hostname = t.host.clone();
                     }
                     target.data.port = t.port;
                     tunnel = Some(t);
@@ -333,6 +330,17 @@ impl HostGates {
             self.advanced.pending = None;
             match result {
                 Ok(mut c) => {
+                    // Only an authenticated integrated SSH connection proves success.
+                    if c.terminal.is_some()
+                        && let Some(login) = &self.advanced.login
+                        && login.save
+                        && !login.password.is_empty()
+                    {
+                        self.send(Action::SetSecret(
+                            c.session.uuid.clone(),
+                            login.password.clone(),
+                        ));
+                    }
                     self.advanced.login = None;
                     if let Some(t) = c.terminal.take() {
                         let id = uuid::Uuid::new_v4().to_string();

@@ -9,6 +9,9 @@ pub fn find_program(names: &[&str]) -> Option<PathBuf> {
     let paths = std::env::var_os("PATH")?;
     for name in names {
         for dir in std::env::split_paths(&paths) {
+            if !dir.is_absolute() {
+                continue;
+            }
             let path = dir.join(name);
             if path.is_file() {
                 return Some(path);

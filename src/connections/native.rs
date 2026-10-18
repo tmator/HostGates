@@ -83,6 +83,15 @@ pub fn connect(auth: &Auth) -> Result<ssh2::Session> {
     }
     let check = known.check_port(&auth.host, auth.port, hostkey);
     // An explicit pin also detects changes after an earlier accepted connection.
+    if matches!(
+        check,
+        ssh2::CheckResult::Mismatch | ssh2::CheckResult::Failure
+    ) {
+        return Err(error(format!(
+            "HOSTKEY_CHANGED {}:{} SHA256(hex)={fingerprint}",
+            auth.host, auth.port
+        )));
+    }
     if !auth.fingerprint.is_empty() {
         if auth.fingerprint != fingerprint {
             return Err(error(format!(
@@ -128,6 +137,7 @@ pub fn connect(auth: &Auth) -> Result<ssh2::Session> {
 }
 
 pub struct Tunnel {
+    pub host: String,
     pub port: u16,
     stop: Arc<AtomicBool>,
 }
@@ -140,7 +150,11 @@ impl Tunnel {
     pub fn start(auth: Auth, target: String, port: u16) -> Result<Self> {
         // Authenticate and verify the gateway before exposing a listener.
         let initial = connect(&auth)?;
-        let listener = std::net::TcpListener::bind(("127.0.0.1", 0)).map_err(error)?;
+        // A distinct loopback host separates browser cookies between tunnels.
+        // This is not authentication against other local processes.
+        let bytes = *uuid::Uuid::new_v4().as_bytes();
+        let host = format!("127.{}.{}.{}", bytes[0], bytes[1], bytes[2].max(1));
+        let listener = std::net::TcpListener::bind((host.as_str(), 0)).map_err(error)?;
         let local = listener.local_addr().map_err(error)?.port();
         listener.set_nonblocking(true).map_err(error)?;
         let stop = Arc::new(AtomicBool::new(false));
@@ -234,7 +248,11 @@ impl Tunnel {
                 }
             }
         });
-        Ok(Self { port: local, stop })
+        Ok(Self {
+            host,
+            port: local,
+            stop,
+        })
     }
 }
 
@@ -291,15 +309,25 @@ impl FileBrowser {
                             path = dir;
                         }
                         FileAction::Download(entries, dir) => {
+                            let mut budget = DownloadBudget::default();
                             for entry in entries {
                                 let name = safe_name(&entry.path)?;
-                                download(&sftp, &entry.path, &dir.join(name), &cancelled, 0)?;
+                                download(
+                                    &sftp,
+                                    &entry.path,
+                                    &dir.join(name),
+                                    &cancelled,
+                                    0,
+                                    &mut budget,
+                                )?;
                             }
                         }
                     }
                     let mut entries = Vec::new();
                     for (p, stat) in sftp.readdir(&path).map_err(error)? {
-                        let name = safe_name(&p)?;
+                        let Ok(name) = safe_name(&p) else {
+                            continue;
+                        };
                         entries.push(Entry {
                             path: p.clone(),
                             name,
@@ -461,20 +489,39 @@ fn upload(
     }
     Ok(())
 }
+#[derive(Default)]
+struct DownloadBudget {
+    entries: u64,
+    bytes: u64,
+}
+impl DownloadBudget {
+    fn consume(&mut self, entries: u64, bytes: u64) -> Result<()> {
+        if entries > 10000 - self.entries || bytes > 10 * 1024 * 1024 * 1024 - self.bytes {
+            return Err(error(
+                "Limite de téléchargement atteinte (10 000 entrées ou 10 Gio par opération).",
+            ));
+        }
+        self.entries += entries;
+        self.bytes += bytes;
+        Ok(())
+    }
+}
 fn download(
     sftp: &ssh2::Sftp,
     remote: &Path,
     local: &Path,
     cancel: &AtomicBool,
     depth: usize,
+    budget: &mut DownloadBudget,
 ) -> Result<()> {
     check(cancel, depth)?;
+    budget.consume(1, 0)?;
     let meta = sftp.lstat(remote).map_err(error)?;
     if meta.is_dir() {
         std::fs::create_dir(local).map_err(error)?;
         for (p, _) in sftp.readdir(remote).map_err(error)? {
             let name = safe_name(&p)?;
-            download(sftp, &p, &local.join(name), cancel, depth + 1)?;
+            download(sftp, &p, &local.join(name), cancel, depth + 1, budget)?;
         }
     } else if meta.is_file() {
         let file = std::fs::OpenOptions::new()
@@ -482,9 +529,35 @@ fn download(
             .create_new(true)
             .open(local)
             .map_err(error)?;
-        copy(sftp.open(remote).map_err(error)?, file, cancel)?;
+        let mut file = file;
+        let mut source = sftp.open(remote).map_err(error)?;
+        let mut buffer = [0u8; 65536];
+        loop {
+            check(cancel, depth)?;
+            let count = source.read(&mut buffer).map_err(error)?;
+            if count == 0 {
+                break;
+            }
+            budget.consume(0, count as u64)?;
+            file.write_all(&buffer[..count]).map_err(error)?;
+        }
+        file.flush().map_err(error)?;
     } else {
         return Err(error("Lien symbolique ou fichier spécial non transféré."));
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod budget_tests {
+    #[test]
+    fn download_limits_are_cumulative_and_fail_before_writing() {
+        let mut budget = super::DownloadBudget::default();
+        budget
+            .consume(9999, 10 * 1024 * 1024 * 1024 - 1)
+            .expect("within limit");
+        budget.consume(1, 1).expect("at limit");
+        assert!(budget.consume(1, 0).is_err());
+        assert!(budget.consume(0, 1).is_err());
+    }
 }

@@ -132,7 +132,14 @@ impl Database {
         data.validate()?;
         let uuid = match id {
             Some(id) => {
-                self.session(id)?;
+                let exists: bool = self.conn.query_row(
+                    "SELECT EXISTS(SELECT 1 FROM sessions WHERE uuid=?)",
+                    [id],
+                    |r| r.get(0),
+                )?;
+                if !exists {
+                    return Err(AppError::NotFound);
+                }
                 id.to_owned()
             }
             None => uuid::Uuid::new_v4().to_string(),
