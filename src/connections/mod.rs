@@ -28,6 +28,12 @@ pub fn find_program(names: &[&str]) -> Option<PathBuf> {
     None
 }
 pub fn ssh_arguments(s: &crate::models::SessionInput) -> crate::error::Result<Vec<String>> {
+    ssh_arguments_with_legacy(s, false)
+}
+pub fn ssh_arguments_with_legacy(
+    s: &crate::models::SessionInput,
+    legacy_ssh_rsa: bool,
+) -> crate::error::Result<Vec<String>> {
     s.validate()?;
     let mut args = vec![
         "-tt".into(),
@@ -42,6 +48,9 @@ pub fn ssh_arguments(s: &crate::models::SessionInput) -> crate::error::Result<Ve
         "-p".into(),
         s.port.to_string(),
     ];
+    if legacy_ssh_rsa {
+        args.extend(["-o".into(), "HostKeyAlgorithms=+ssh-rsa".into()]);
+    }
     if !s.username.is_empty() {
         args.extend(["-l".into(), s.username.clone()]);
     }

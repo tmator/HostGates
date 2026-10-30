@@ -22,6 +22,7 @@ pub struct SessionOptions {
     pub fingerprint: String,
     pub gateway: Option<String>,
     pub external_ssh: bool,
+    pub legacy_ssh_rsa: bool,
     pub manual_external_auth: bool,
 }
 #[derive(Default, Serialize, Deserialize)]
@@ -152,6 +153,7 @@ fn auth(s: &Session, options: &SessionOptions, password: Secret) -> Auth {
         password,
         key: options.key.clone(),
         fingerprint: options.fingerprint.clone(),
+        legacy_ssh_rsa: options.legacy_ssh_rsa,
         endpoint: None,
     }
 }
@@ -603,7 +605,9 @@ if ui.small_button(crate::i18n::tr("×")).clicked(){login.options.key=PathBuf::n
             });
             ui.label(crate::i18n::tr("Passerelle SSH pour SSH, RDP, VNC ou Web. Un seul saut ; écoute locale uniquement."));
             ui.checkbox(&mut opt.manual_external_auth, crate::i18n::tr("Saisir le mot de passe dans le client externe (RDP / VNC)"));
-            if self.snapshot.sessions.iter().any(|s|s.uuid==self.advanced.options_id&&s.data.protocol==crate::models::Protocol::SSH){ui.checkbox(&mut opt.external_ssh,crate::i18n::tr("Utiliser OpenSSH externe (sans volet SFTP intégré)"));}
+            if self.snapshot.sessions.iter().any(|s|s.uuid==self.advanced.options_id&&s.data.protocol==crate::models::Protocol::SSH){ui.checkbox(&mut opt.external_ssh,crate::i18n::tr("Utiliser OpenSSH externe (sans volet SFTP intégré)"));
+                ui.checkbox(&mut opt.legacy_ssh_rsa, crate::i18n::tr("Autoriser la clé hôte ssh-rsa (SHA-1, serveur ancien)"));
+                ui.small(crate::i18n::tr("À activer uniquement pour cette session si le serveur exige ssh-rsa. La vérification de son empreinte reste obligatoire."));}
             ui.label(crate::i18n::tr("Empreinte SHA-256 hexadécimale de la clé serveur"));ui.text_edit_singleline(&mut opt.fingerprint);
             ui.small(crate::i18n::tr("Ne modifiez une empreinte qu'après vérification indépendante de la nouvelle clé."));
             save=!self.busy && (ui.add_enabled(!self.busy,egui::Button::new(crate::i18n::tr("Enregistrer"))).clicked() || super::shortcuts::submitted(ctx,"options"));

@@ -113,6 +113,8 @@ def serve(client):
         with paramiko.Transport(client) as t:
             # No moduli file in this fixture: do not advertise group exchange.
             t.get_security_options().kex = tuple(k for k in t.get_security_options().kex if "group-exchange" not in k)
+            if profile == "legacy-rsa":
+                t.get_security_options().key_types = ("ssh-rsa",)
             t.add_server_key(key)
             t.set_subsystem_handler("sftp", paramiko.SFTPServer, Files)
             server = Server()

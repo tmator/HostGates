@@ -36,7 +36,7 @@ fn native_terminal_sftp_roundtrip_and_tunnel() {
         std::process::Command::new("python")
             .arg("scripts/native-ssh-fixture.py")
             .arg(dir.path())
-            .env("PYTHONPATH", ".tools/ssh-test")
+            .env("PYTHONPATH", ".tools/ssh-test-legacy")
             .stdout(std::process::Stdio::null())
             .stderr(std::process::Stdio::inherit())
             .spawn()
@@ -55,6 +55,7 @@ fn native_terminal_sftp_roundtrip_and_tunnel() {
         password: zeroize::Zeroizing::new("fixture-secret".into()),
         key: PathBuf::new(),
         fingerprint: "wrong".into(),
+        legacy_ssh_rsa: false,
         endpoint: None,
     };
     assert!(native::connect(&auth).is_err());
@@ -141,14 +142,14 @@ fn native_terminal_sftp_roundtrip_and_tunnel() {
 #[test]
 #[ignore = "Requires Python and Paramiko; loopback fixture only"]
 fn modern_host_keys_negotiate_and_bad_password_is_rejected() {
-    for profile in ["ed25519", "ecdsa"] {
+    for profile in ["ed25519", "ecdsa", "legacy-rsa"] {
         let dir = tempfile::tempdir().expect("tempdir");
         let _fixture = Fixture(
             std::process::Command::new("python")
                 .args(["scripts/native-ssh-fixture.py"])
                 .arg(dir.path())
                 .arg(profile)
-                .env("PYTHONPATH", ".tools/ssh-test")
+                .env("PYTHONPATH", ".tools/ssh-test-legacy")
                 .stdout(std::process::Stdio::null())
                 .spawn()
                 .expect("fixture"),
@@ -164,8 +165,26 @@ fn modern_host_keys_negotiate_and_bad_password_is_rejected() {
             password: zeroize::Zeroizing::new("incorrect".into()),
             key: PathBuf::new(),
             fingerprint: std::fs::read_to_string(dir.path().join("fingerprint")).expect("pin"),
+            legacy_ssh_rsa: false,
             endpoint: None,
         };
+        if profile == "legacy-rsa" {
+            assert!(
+                native::connect(&auth).is_err(),
+                "legacy disabled by default"
+            );
+            auth.legacy_ssh_rsa = true;
+            let pin = auth.fingerprint.clone();
+            auth.fingerprint = "wrong".into();
+            assert!(
+                native::connect(&auth)
+                    .err()
+                    .expect("key rejected")
+                    .to_string()
+                    .contains("HOSTKEY_CHANGED")
+            );
+            auth.fingerprint = pin;
+        }
         let err = native::connect(&auth)
             .err()
             .expect("wrong password rejected")
@@ -178,6 +197,8 @@ fn modern_host_keys_negotiate_and_bad_password_is_rejected() {
             session.methods(ssh2::MethodType::HostKey),
             Some(if profile == "ed25519" {
                 "ssh-ed25519"
+            } else if profile == "legacy-rsa" {
+                "ssh-rsa"
             } else {
                 "ecdsa-sha2-nistp256"
             })

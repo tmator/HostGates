@@ -72,9 +72,16 @@ impl HostGates {
                         return;
                     }
                 };
-                crate::connections::ssh_arguments(&s.data)
-                    .and_then(|args| Terminal::launch(&program, &args, ctx.clone()))
-                    .map(|t| TabClient::Terminal(Box::new(t), TerminalView::default()))
+                crate::connections::ssh_arguments_with_legacy(
+                    &s.data,
+                    self.advanced
+                        .preferences
+                        .sessions
+                        .get(&s.uuid)
+                        .is_some_and(|o| o.legacy_ssh_rsa),
+                )
+                .and_then(|args| Terminal::launch(&program, &args, ctx.clone()))
+                .map(|t| TabClient::Terminal(Box::new(t), TerminalView::default()))
             }
             Protocol::RDP => {
                 #[cfg(windows)]

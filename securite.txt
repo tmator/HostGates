@@ -219,3 +219,15 @@ CORRECTIFS DE REVUE — 18 octobre 2026
 - VNC : DES à clé fixe est une obfuscation réversible, pas un chiffrement sûr.
 - Supprimer ensemble vault.json ET vault.enabled réactive le stockage système pour
   les nouveaux secrets. Le mot de passe maître ne protège pas cette réinitialisation.
+
+
+VERSION 0.3.7 — Compatibilité ssh-rsa
+Option explicite par session, désactivée par défaut, pour les serveurs dont la clé
+hôte exige RSA/SHA-1 (ssh-rsa). Les algorithmes modernes restent prioritaires.
+SSH intégré, SFTP et tunnels utilisent ce choix ; OpenSSH externe reçoit uniquement
+HostKeyAlgorithms=+ssh-rsa. Les empreintes et known_hosts restent vérifiés avant
+l'authentification. Aucun changement global à ssh_config ni aux politiques système.
+Cette option ne réactive ni DSA, ni les anciens échanges de clés/chiffrements, ni
+PubkeyAcceptedAlgorithms pour l'authentification utilisateur. Certaines politiques
+système peuvent encore interdire SHA-1. Préférer une mise à jour de l'appareil.
+Pour une passerelle ancienne, activer l'option sur la session SSH de la passerelle.

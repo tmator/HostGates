@@ -22,6 +22,7 @@ pub struct Auth {
     pub password: Secret,
     pub key: PathBuf,
     pub fingerprint: String,
+    pub legacy_ssh_rsa: bool,
     pub endpoint: Option<(String, u16)>,
 }
 fn error(e: impl std::fmt::Display) -> AppError {
@@ -52,12 +53,20 @@ pub fn connect(auth: &Auth) -> Result<ssh2::Session> {
     for method in [ssh2::MethodType::MacCs, ssh2::MethodType::MacSc] {
         session.method_pref(method,"hmac-sha2-256-etm@openssh.com,hmac-sha2-512-etm@openssh.com,hmac-sha2-256,hmac-sha2-512").map_err(error)?;
     }
-    session.method_pref(ssh2::MethodType::HostKey,"ssh-ed25519,ecdsa-sha2-nistp256,ecdsa-sha2-nistp384,ecdsa-sha2-nistp521,rsa-sha2-512,rsa-sha2-256").map_err(error)?;
+    let modern = "ssh-ed25519,ecdsa-sha2-nistp256,ecdsa-sha2-nistp384,ecdsa-sha2-nistp521,rsa-sha2-512,rsa-sha2-256";
+    let host_keys = if auth.legacy_ssh_rsa {
+        format!("{modern},ssh-rsa")
+    } else {
+        modern.to_owned()
+    };
+    session
+        .method_pref(ssh2::MethodType::HostKey, &host_keys)
+        .map_err(error)?;
     session.set_tcp_stream(tcp);
     session.set_timeout(15000);
     session.handshake().map_err(|e| {
         if e.code() == ssh2::ErrorCode::Session(-5) {
-            error("Négociation cryptographique SSH impossible. Vérifiez les algorithmes et les clés hôte du serveur (Ed25519, ECDSA ou RSA-SHA2). Un serveur ancien ou utilisant uniquement des certificats hôte peut nécessiter OpenSSH externe dans les options de la session. Aucun mot de passe n'a encore été envoyé.")
+            error("Négociation cryptographique SSH impossible. Vérifiez les algorithmes et les clés hôte du serveur (Ed25519, ECDSA ou RSA-SHA2). Si le serveur propose uniquement ssh-rsa, activez son autorisation dans Options SSH / tunnel pour cette session. Les autres algorithmes anciens ne sont pas activés. Un serveur utilisant uniquement des certificats hôte peut nécessiter OpenSSH externe. Aucun mot de passe n'a encore été envoyé.")
         } else {
             error(e)
         }

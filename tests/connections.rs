@@ -105,3 +105,22 @@ fn native_pty_output_and_exit() -> Result<()> {
     }
     panic!("PTY did not produce expected output and exit before timeout")
 }
+
+#[test]
+fn legacy_host_key_is_opt_in_and_keeps_verification() {
+    let s = session();
+    assert!(
+        !ssh_arguments(&s)
+            .expect("arguments")
+            .iter()
+            .any(|a| a.contains("ssh-rsa"))
+    );
+    let args = hostgates::connections::ssh_arguments_with_legacy(&s, true).expect("arguments");
+    assert!(args.contains(&"HostKeyAlgorithms=+ssh-rsa".into()));
+    assert!(args.contains(&"StrictHostKeyChecking=ask".into()));
+    assert!(
+        !args
+            .iter()
+            .any(|a| a.contains("PubkeyAccepted") || a.contains("KexAlgorithms"))
+    );
+}
