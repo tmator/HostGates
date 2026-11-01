@@ -75,11 +75,7 @@ fn native_pty_output_and_exit() -> Result<()> {
     // Exercise the PTY itself without waiting for PowerShell runtime startup on CI.
     let program = hostgates::connections::find_program(&["cmd"]).expect("cmd");
     #[cfg(windows)]
-    let args = vec![
-        "/d".into(),
-        "/c".into(),
-        "echo HOSTGATES_PTY_OK".into(),
-    ];
+    let args = vec!["/d".into(), "/c".into(), "echo HOSTGATES_PTY_OK".into()];
     #[cfg(not(windows))]
     let program = std::path::PathBuf::from("/bin/echo");
     #[cfg(not(windows))]
