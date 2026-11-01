@@ -72,13 +72,13 @@ fn terminal_utf8_ansi_and_resize() {
 #[test]
 fn native_pty_output_and_exit() -> Result<()> {
     #[cfg(windows)]
-    let program = hostgates::connections::find_program(&["powershell"]).expect("powershell");
+    // Exercise the PTY itself without waiting for PowerShell runtime startup on CI.
+    let program = hostgates::connections::find_program(&["cmd"]).expect("cmd");
     #[cfg(windows)]
     let args = vec![
-        "-NoLogo".into(),
-        "-NoProfile".into(),
-        "-Command".into(),
-        "Write-Output HOSTGATES_PTY_OK".into(),
+        "/d".into(),
+        "/c".into(),
+        "echo HOSTGATES_PTY_OK".into(),
     ];
     #[cfg(not(windows))]
     let program = std::path::PathBuf::from("/bin/echo");
@@ -103,7 +103,11 @@ fn native_pty_output_and_exit() -> Result<()> {
         }
         std::thread::sleep(std::time::Duration::from_millis(20));
     }
-    panic!("PTY did not produce expected output and exit before timeout")
+    panic!(
+        "PTY did not produce expected output and exit before timeout: closed={}, screen={:?}",
+        terminal.closed,
+        terminal.parser.screen().contents()
+    )
 }
 
 #[test]
