@@ -1,5 +1,6 @@
 pub mod exchange;
 pub mod mobaxterm;
+pub mod rdp;
 use crate::{
     error::{AppError, Result},
     models::SessionInput,
@@ -15,6 +16,9 @@ pub enum DuplicatePolicy {
 }
 #[derive(Clone)]
 pub struct ImportRow {
+    pub rdp_routing: crate::connections::rdp::Routing,
+    pub rdp_configuration: bool,
+    pub rdp_gateway: Option<crate::connections::rdp::Gateway>,
     pub line: usize,
     pub name: String,
     pub folder: String,
@@ -53,6 +57,9 @@ pub fn map_row(
     user: &str,
 ) -> ImportRow {
     let mut row = ImportRow {
+        rdp_routing: Default::default(),
+        rdp_gateway: None,
+        rdp_configuration: false,
         line,
         name: name.into(),
         folder: folder.into(),

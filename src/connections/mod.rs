@@ -1,3 +1,4 @@
+pub mod embedded_rdp;
 pub mod native;
 pub mod rdp;
 mod secret_file;

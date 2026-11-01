@@ -7,7 +7,10 @@ impl HostGates {
         }
         if let Some(file) = rfd::FileDialog::new()
             .set_title(crate::i18n::tr("Importer des sessions MobaXterm"))
-            .add_filter("Sessions MobaXterm", &["mxtsessions", "moba", "ini", "csv"])
+            .add_filter(
+                "Sessions MobaXterm",
+                &["mxtsessions", "moba", "ini", "csv", "rdp"],
+            )
             .pick_file()
         {
             self.send(Action::PreviewImport(file));

@@ -54,7 +54,7 @@ def main():
     copy(ROOT / "packaging/linux/hostgates.svg", stage / "usr/share/icons/hicolor/scalable/apps/hostgates.svg")
     run("desktop-file-validate", str(stage / "usr/share/applications/hostgates.desktop"))
     documentation = stage / "usr/share/doc/hostgates"
-    for name in ("LICENSE", "licence.md", "README.md", "securite.txt"):
+    for name in ("LICENSE", "licence.md", "README.md", "CHANGELOG.md", "securite.txt"):
         copy(ROOT / name, documentation / name)
     for path in (ROOT / "docs").rglob("*"):
         if path.is_file() and path.name not in {"REQUIREMENTS.md", "STATUS.md", "GITHUB.md"}:
@@ -65,7 +65,7 @@ def main():
         if path.suffix in {".txt", ".json", ".md"}:
             copy(path, documentation / "fonts" / path.name)
     for dependency in metadata["packages"]:
-        if not dependency.get("source"):
+        if not dependency.get("source") and dependency["name"] not in {"ironrdp-client", "ironrdp-mstsgu", "ironrdp-connector", "ironrdp-pdu"}:
             continue
         folder = Path(dependency["manifest_path"]).parent
         dest = documentation / "third-party" / f'{dependency["name"]}-{dependency["version"]}'
@@ -73,7 +73,7 @@ def main():
             if not path.is_file():
                 continue
             if (path.name.lower().startswith(("license", "licence", "copying", "copyright", "notice"))
-                    or dependency["name"] == "option-ext"
+                    or dependency["name"] in {"option-ext", "ironrdp-client", "ironrdp-mstsgu", "ironrdp-connector", "ironrdp-pdu"}
                     or (dependency["name"] == "epaint_default_fonts" and path.suffix == ".txt")):
                 copy(path, dest / path.relative_to(folder))
     (documentation / "third-party/README.txt").write_text(
@@ -104,7 +104,7 @@ Suggests: openssh-client, tigervnc-viewer
 Homepage: https://github.com/tmator/HostGates
 Description: Native SSH, RDP, VNC and web connection manager
  Integrated SSH terminal, SFTP, tunnels, encrypted vault and 12 interface languages.
- RDP and VNC require separately installed clients. A graphical desktop is required.
+ VNC and optional external RDP require separately installed clients. A graphical desktop is required.
 """)
     deb = output / f"hostgates_{version}-1_amd64.deb"
     subprocess.run(["dpkg-deb", "--root-owner-group", "-Zxz", "--build", str(stage), str(deb)], check=True)
@@ -130,7 +130,7 @@ Recommends: xdg-desktop-portal, gnome-keyring
 
 %description
 Integrated SSH terminal, SFTP, tunnels, encrypted vault and 12 interface languages.
-RDP and VNC require separately installed clients. A graphical desktop is required.
+VNC and optional external RDP require separately installed clients. A graphical desktop is required.
 Bundled dependency and font licenses accompany the package in its documentation.
 
 %prep

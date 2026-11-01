@@ -2,6 +2,8 @@ use super::*;
 use crate::importers::{DuplicatePolicy, Preview, exchange::identity, folder_parts};
 #[derive(Default)]
 pub struct ImportReport {
+    pub rdp_routes: Vec<(String, crate::connections::rdp::Routing)>,
+    pub rdp_gateways: Vec<(String, Option<crate::connections::rdp::Gateway>)>,
     pub ssh: usize,
     pub rdp: usize,
     pub vnc: usize,
@@ -109,6 +111,14 @@ impl Database {
                 None
             };
             let id = self.save_session(replace, &data)?;
+            if row.rdp_configuration {
+                report
+                    .rdp_routes
+                    .push((id.clone(), row.rdp_routing.clone()));
+                report
+                    .rdp_gateways
+                    .push((id.clone(), row.rdp_gateway.clone()));
+            }
             if replace.is_none() {
                 sessions.entry(key).or_default().push(id);
             }

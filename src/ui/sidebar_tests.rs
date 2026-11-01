@@ -193,10 +193,13 @@ fn sidebar_app() -> HostGates {
         settings: false,
         programs_draft: None,
         programs_check: None,
+        rdp_default_draft: None,
         path: String::new(),
         vault_ready: false,
         tabs: vec![],
         active_tab: None,
+        fullscreen_tab: None,
+        restore_fullscreen: false,
         catalog_open: false,
         preview: None,
         importing: false,
@@ -481,4 +484,88 @@ fn shortcuts_follow_front_window_and_preserve_multiline_enter() {
     output.textures_delta.clear();
     shortcut_frame(&mut app, &ctx, egui::Key::Enter);
     assert!(!super::super::shortcuts::submitted(&ctx, "editor"));
+}
+
+#[test]
+fn imported_gateway_opens_embedded_tab_by_default() {
+    let mut app = sidebar_app();
+    let mut db = crate::database::Database::in_memory().expect("db");
+    let preview = crate::importers::rdp::parse(
+        b"full address:s:desktop.example\ngatewayhostname:s:gateway.example\nloadbalanceinfo:s:tsv://MS Terminal Services Plugin.1.collection\nuse redirection server name:i:1",
+        "Gateway fixture",
+    )
+    .expect("parse");
+    let report = db.import(&preview).expect("import");
+    app.snapshot = db.snapshot().expect("snapshot");
+    let (id, gateway) = report.rdp_gateways.into_iter().next().expect("gateway");
+    let options = app.advanced.preferences.sessions.entry(id).or_default();
+    options.external_rdp = true;
+    options.gateway = Some(uuid::Uuid::new_v4().to_string());
+    options.apply_rdp_import(gateway);
+    options.rdp_routing = report.rdp_routes[0].1.clone();
+    // Persist/reload, as when the imported connection is opened after a restart.
+    let saved = serde_json::to_string(&app.advanced.preferences).expect("serialize");
+    app.advanced.preferences = serde_json::from_str(&saved).expect("reload");
+    let session = app.snapshot.sessions[0].clone();
+    assert_eq!(
+        app.advanced.preferences.sessions[&session.uuid].rdp_routing,
+        preview.rows[0].rdp_routing
+    );
+    assert!(
+        app.advanced.preferences.sessions[&session.uuid]
+            .gateway
+            .is_none()
+    );
+    app.begin_connect(&session, &egui::Context::default());
+    assert!(app.error.is_none());
+    assert_eq!(app.tabs.len(), 1);
+    assert!(matches!(
+        app.tabs[0].client,
+        crate::ui::tabs::TabClient::EmbeddedRdp(_)
+    ));
+}
+
+#[test]
+fn rdp_fullscreen_restores_layout_and_exits_for_missing_or_closed_session() {
+    let mut app = sidebar_app();
+    let ctx = egui::Context::default();
+    let preview = crate::importers::rdp::parse(b"full address:s:host", "fixture")
+        .expect("valid test fixture");
+    let identity = preview.rows[0].data.clone().expect("valid test fixture");
+    app.tabs.push(crate::ui::tabs::SessionTab {
+        id: "rdp".into(),
+        title: "RDP".into(),
+        session: None,
+        files: None,
+        tunnel: None,
+        client: crate::ui::tabs::TabClient::EmbeddedRdp(Box::new(
+            crate::connections::embedded_rdp::EmbeddedRdp::new(
+                identity.clone(),
+                identity,
+                crate::credentials::Secret::new(String::new()),
+            ),
+        )),
+    });
+    app.advanced.panes = 3;
+    app.advanced.visible = vec!["rdp".into(), "other".into()];
+    app.enter_rdp_fullscreen("rdp".into(), &ctx);
+    assert_eq!(app.fullscreen_tab.as_deref(), Some("rdp"));
+    app.leave_rdp_fullscreen(&ctx);
+    assert_eq!(app.advanced.panes, 3);
+    assert_eq!(app.advanced.visible, ["rdp", "other"]);
+    app.enter_rdp_fullscreen("missing".into(), &ctx);
+    let mut output = ctx.run_ui(Default::default(), |ui| {
+        assert!(!app.fullscreen_workspace(ui));
+    });
+    output.textures_delta.clear();
+    assert!(app.fullscreen_tab.is_none());
+    app.enter_rdp_fullscreen("rdp".into(), &ctx);
+    if let crate::ui::tabs::TabClient::EmbeddedRdp(r) = &mut app.tabs[0].client {
+        r.stop();
+    }
+    let mut output = ctx.run_ui(Default::default(), |ui| {
+        assert!(!app.fullscreen_workspace(ui));
+    });
+    output.textures_delta.clear();
+    assert!(app.fullscreen_tab.is_none());
 }

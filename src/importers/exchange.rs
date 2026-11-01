@@ -28,6 +28,14 @@ pub fn read_preview(path: &Path, snapshot: &Snapshot) -> Result<Preview> {
     }
     let mut preview = if path
         .extension()
+        .is_some_and(|e| e.eq_ignore_ascii_case("rdp"))
+    {
+        super::rdp::parse(
+            &bytes,
+            path.file_stem().and_then(|s| s.to_str()).unwrap_or("RDP"),
+        )?
+    } else if path
+        .extension()
         .is_some_and(|e| e.eq_ignore_ascii_case("csv"))
     {
         parse_csv(&bytes)?

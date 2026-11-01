@@ -37,6 +37,7 @@ impl HostGates {
             self.advanced.master = zeroize::Zeroizing::new(String::new());
             self.advanced.confirmation = zeroize::Zeroizing::new(String::new());
             self.programs_draft = None;
+            self.rdp_default_draft = None;
             self.programs_check = None;
         }
         if self.settings {
@@ -44,6 +45,9 @@ impl HostGates {
                 .programs_draft
                 .take()
                 .unwrap_or_else(|| self.snapshot.programs.clone());
+            let mut default_external = self
+                .rdp_default_draft
+                .unwrap_or(self.advanced.preferences.default_external_rdp);
             let mut save_programs = false;
             let mut open = true;
             egui::Window::new(crate::i18n::tr("Paramètres")).id(egui::Id::new("settings_dialog")).open(&mut open).default_width(700.0).show(ctx,|ui| {
@@ -55,6 +59,11 @@ impl HostGates {
                 });
                 if previous!=self.advanced.preferences.language && let Err(e)=self.advanced.save(){self.error=Some(e.to_string());}
                 self.vault_settings(ui);ui.separator();
+                ui.heading(crate::i18n::tr("Client RDP par défaut"));
+                ui.selectable_value(&mut default_external, false, crate::i18n::tr("RDP intégré (IronRDP)"));
+                ui.selectable_value(&mut default_external, true, crate::i18n::tr(if cfg!(windows) { "RDP (mstsc)" } else { "RDP (FreeRDP)" }));
+                ui.label(crate::i18n::tr("Ce choix s’applique aux prochaines connexions. Une session peut utiliser un autre client dans ses options."));
+                ui.separator();
                 ui.heading(crate::i18n::tr("Applications externes"));
                 ui.label(crate::i18n::tr("Champ vide : recherche automatique dans PATH. Sinon, chemin absolu de l’exécutable, sans guillemets ni arguments."));
                 ui.add_enabled_ui(!self.busy, |ui| {
@@ -80,8 +89,8 @@ impl HostGates {
                                 Ok(path) => format!("{} : {}", kind.label(), path.display()), Err(e) => e.to_string(),
                             }).collect::<Vec<_>>().join("\n"));
                         }
-                        if !self.busy && (ui.button(crate::i18n::tr("Enregistrer les chemins")).clicked() || super::shortcuts::submitted(ctx,"settings")) { save_programs = true; }
-                        if ui.button(crate::i18n::tr("Annuler les modifications")).clicked() { programs = self.snapshot.programs.clone(); self.programs_check = None; }
+                        if !self.busy && (ui.button(crate::i18n::tr("Enregistrer")).clicked() || super::shortcuts::submitted(ctx,"settings")) { save_programs = true; }
+                        if ui.button(crate::i18n::tr("Annuler les modifications")).clicked() { programs = self.snapshot.programs.clone(); default_external = self.advanced.preferences.default_external_rdp; self.programs_check = None; }
                         if ui.button(crate::i18n::tr("Aide à la configuration")).clicked() { self.help_open = true; self.help_topic = super::help::TOPICS.len()-1; }
                     });
                 });
@@ -98,8 +107,16 @@ impl HostGates {
                 });
             });
             if save_programs {
-                self.send(Action::Programs(programs.clone()));
+                let previous = self.advanced.preferences.default_external_rdp;
+                self.advanced.preferences.default_external_rdp = default_external;
+                if let Err(e) = self.advanced.save() {
+                    self.advanced.preferences.default_external_rdp = previous;
+                    self.error = Some(e.to_string());
+                } else {
+                    self.send(Action::Programs(programs.clone()));
+                }
             }
+            self.rdp_default_draft = open.then_some(default_external);
             self.programs_draft = if open { Some(programs) } else { None };
             self.settings = open;
         }

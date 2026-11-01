@@ -18,20 +18,20 @@ RHEL/Rocky/AlmaLinux 8, Debian 11, les distributions sans glibc telles qu'Alpine
 Debian ou Ubuntu, dans le dossier contenant le paquet :
 
 ```bash
-sudo apt install ./hostgates_0.3.5-1_amd64.deb
+sudo apt install ./hostgates_0.4.0-1_amd64.deb
 hostgates
 ```
 
 RHEL, Rocky, AlmaLinux ou Fedora :
 
 ```bash
-sudo dnf install ./hostgates-0.3.5-1.x86_64.rpm
+sudo dnf install ./hostgates-0.4.0-1.x86_64.rpm
 hostgates
 ```
 
 Utilisez `apt` ou `dnf` pour résoudre les dépendances ; évitez `dpkg -i` ou `rpm --nodeps` seuls sur votre poste. Les paquets locaux ne sont pas signés par une clé d'éditeur ; vérifiez le fichier SHA-256 fourni.
 
-SSH et SFTP sont intégrés. Pour RDP, installez le client FreeRDP fourni par votre distribution ; pour VNC, un client compatible TigerVNC. Indiquez leurs chemins dans Paramètres > Applications externes si nécessaire. Les noms de paquets et exécutables diffèrent selon les versions des distributions.
+SSH et SFTP sont intégrés. Le RDP intégré ne nécessite pas de client externe. Pour le mode RDP externe, installez FreeRDP fourni par votre distribution ; pour VNC, un client compatible TigerVNC. Indiquez leurs chemins dans Paramètres > Applications externes si nécessaire. Les noms de paquets et exécutables diffèrent selon les versions des distributions.
 
 Les dialogues de fichiers nécessitent `xdg-desktop-portal` et un backend adapté au bureau (GTK, KDE…). Le coffre système nécessite un service Secret Service disponible dans la session DBus, par exemple GNOME Keyring. Le coffre maître de HostGates est distinct. Le navigateur par défaut utilise les réglages du bureau.
 

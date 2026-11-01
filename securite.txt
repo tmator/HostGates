@@ -231,3 +231,17 @@ Cette option ne réactive ni DSA, ni les anciens échanges de clés/chiffrements
 PubkeyAcceptedAlgorithms pour l'authentification utilisateur. Certaines politiques
 système peuvent encore interdire SHA-1. Préférer une mise à jour de l'appareil.
 Pour une passerelle ancienne, activer l'option sur la session SSH de la passerelle.
+
+RDP intégré : validation TLS stricte avant authentification, exception explicite limitée à une connexion pour les certificats invalides. Empreinte SHA-256 présentée sans confiance automatique. Aucun secret dans les arguments ; copies internes au moteur possibles pendant la connexion. Files images/entrées bornées. Voir docs/RDP_INTEGRATED.md et vendor/ironrdp-client/HOSTGATES_PATCH.md.
+
+RD Gateway intégré : validation TLS stricte sur la passerelle avant authentification HTTP, puis validation indépendante du serveur RDP. Les exceptions de certificat sont explicites, limitées à la connexion et affichent l’adresse concernée. Le mot de passe distinct de passerelle n’est pas persisté ; il est effacé du formulaire au lancement/arrêt, mais le moteur d’authentification conserve ses copies en mémoire pendant la connexion. La réutilisation des identifiants du poste pour la passerelle est activée par défaut, conformément au choix utilisateur ; décochez cette option pour une identité distincte. Les représentations Debug des structures de passerelle masquent les identifiants et secrets. Les certificats et clés sous vendor/ironrdp-mstsgu/tests/certs sont des fixtures publiques upstream, jamais utilisées par le client en production.
+
+Redirections RDS : seuls les paquets Enhanced Security protégés par TLS sur le
+canal RDP négocié sont suivis. Même passerelle et mêmes règles de certificat ;
+chaque destination redirigée subit sa propre validation TLS avant authentification.
+Quatre redirections maximum et détection des boucles. Champs et longueurs validés,
+aucun nom cible traité comme une commande ou une URL. Le cookie de reconnexion
+opaque est masqué en Debug et sa copie dédiée effacée via zeroize ; des copies
+transitoires peuvent subsister dans les tampons du protocole. Il ne remplace pas
+le mot de passe du coffre ni celui de la passerelle. RDSTLS/carte à puce non pris
+en charge ; redirection désactivée pour les tunnels SSH à destination fixe.

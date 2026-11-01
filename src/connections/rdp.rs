@@ -3,10 +3,106 @@ use crate::{
     models::SessionInput,
 };
 use std::process::{Child, Command};
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+#[serde(default)]
+pub struct Gateway {
+    pub rpc_transport: bool,
+    pub host: String,
+    pub username: String,
+    pub usage: u8,
+    pub credential_source: u8,
+}
+impl Default for Gateway {
+    fn default() -> Self {
+        Self {
+            rpc_transport: false,
+            host: String::new(),
+            username: String::new(),
+            usage: 1,
+            credential_source: 4,
+        }
+    }
+}
+impl Gateway {
+    pub fn arguments_with_routing(
+        &self,
+        s: &SessionInput,
+        routing: &Routing,
+    ) -> Result<Vec<String>> {
+        routing.validate()?;
+        let mut args = self.arguments(s)?;
+        if !routing.load_balance_info.is_empty() {
+            args.push(format!("/load-balance-info:{}", routing.load_balance_info));
+        }
+        Ok(args)
+    }
+
+    pub fn file_text_with_routing(&self, s: &SessionInput, routing: &Routing) -> Result<String> {
+        routing.validate()?;
+        let mut text = self.file_text(s)?;
+        text.push_str(&format!(
+            "loadbalanceinfo:s:{}\r\nuse redirection server name:i:{}\r\n",
+            routing.load_balance_info,
+            u8::from(routing.use_redirection_server_name)
+        ));
+        Ok(text)
+    }
+    pub fn validate(&self) -> Result<()> {
+        crate::importers::rdp::endpoint(&self.host, 443)?;
+        if ![1, 2].contains(&self.usage)
+            || ![0, 1, 4].contains(&self.credential_source)
+            || self.username.len() > 256
+            || self.username.chars().any(char::is_control)
+        {
+            return Err(AppError::Validation(
+                "Paramètres RD Gateway invalides.".into(),
+            ));
+        }
+        Ok(())
+    }
+    pub fn arguments(&self, s: &SessionInput) -> Result<Vec<String>> {
+        self.validate()?;
+        if self.credential_source == 1 {
+            return Err(AppError::Validation(
+                "RD Gateway : authentification par carte à puce non configurée pour FreeRDP."
+                    .into(),
+            ));
+        }
+        let mut args = arguments(s, false)?;
+        args.push(format!("/g:{}", self.host.trim()));
+        args.push(format!(
+            "/gateway-usage-method:{}",
+            if self.usage == 2 { "detect" } else { "direct" }
+        ));
+        if !self.username.is_empty() {
+            args.push(format!("/gu:{}", self.username));
+        }
+        Ok(args)
+    }
+    pub fn file_text(&self, s: &SessionInput) -> Result<String> {
+        self.validate()?;
+        s.validate()?;
+        let host = if s.hostname.contains(':') && !s.hostname.starts_with('[') {
+            format!("[{}]", s.hostname)
+        } else {
+            s.hostname.clone()
+        };
+        Ok(format!(
+            "full address:s:{host}:{}\r\nusername:s:{}\r\ndomain:s:{}\r\ngatewayhostname:s:{}\r\ngatewayusagemethod:i:{}\r\ngatewayprofileusagemethod:i:1\r\ngatewaycredentialssource:i:{}\r\ngatewayusername:s:{}\r\npromptcredentialonce:i:0\r\nprompt for credentials:i:1\r\nauthentication level:i:1\r\nredirectclipboard:i:0\r\nredirectprinters:i:0\r\n",
+            s.port,
+            s.username,
+            s.domain,
+            self.host.trim(),
+            self.usage,
+            self.credential_source,
+            self.username
+        ))
+    }
+}
 pub struct RdpSession {
     child: Child,
     // Keep authentication files alive even when a client hands off to another process.
-    credential_file: Option<tempfile::NamedTempFile>,
+    credential_file: Option<super::secret_file::ClientFile>,
     pub status: String,
     pub closed: bool,
 }
@@ -34,6 +130,30 @@ pub fn arguments(s: &SessionInput, windows: bool) -> Result<Vec<String>> {
     }
 }
 impl RdpSession {
+    pub fn launch_gateway(s: &SessionInput, configured: &str, gateway: &Gateway) -> Result<Self> {
+        Self::launch_gateway_with_routing(s, configured, gateway, &Routing::default())
+    }
+    pub fn launch_gateway_with_routing(
+        s: &SessionInput,
+        configured: &str,
+        gateway: &Gateway,
+        routing: &Routing,
+    ) -> Result<Self> {
+        let program = super::resolve_program(configured, super::ProgramKind::Rdp)?;
+        let text = gateway.file_text_with_routing(s, routing)?;
+        let bytes = std::iter::once(0xfeffu16)
+            .chain(text.encode_utf16())
+            .flat_map(u16::to_le_bytes)
+            .collect::<Vec<_>>();
+        let file = super::secret_file::create(".rdp", &bytes)?;
+        let mut client = Self::launch_external(
+            &program,
+            vec![file.path().to_string_lossy().into_owned()],
+            "RDP / RD Gateway",
+        )?;
+        client.credential_file = Some(file);
+        Ok(client)
+    }
     pub fn launch(s: &SessionInput, configured: &str, password: &str) -> Result<Self> {
         let program = super::resolve_program(configured, super::ProgramKind::Rdp)?;
         s.validate()?;
@@ -111,7 +231,7 @@ impl RdpSession {
             closed: false,
         })
     }
-    pub(super) fn retain_credential_file(&mut self, file: tempfile::NamedTempFile) {
+    pub(super) fn retain_credential_file(&mut self, file: super::secret_file::ClientFile) {
         self.credential_file = Some(file);
     }
     pub fn poll(&mut self) {
@@ -141,7 +261,7 @@ impl Drop for RdpSession {
 }
 
 #[cfg(windows)]
-fn credential_file(s: &SessionInput, password: &str) -> Result<tempfile::NamedTempFile> {
+fn credential_file(s: &SessionInput, password: &str) -> Result<super::secret_file::ClientFile> {
     s.validate()?;
     if password.contains('\0') {
         return Err(AppError::Validation(
@@ -206,5 +326,28 @@ mod tests {
         let mut invalid = data;
         invalid.username = "alice\r\nredirectclipboard:i:1".into();
         assert!(super::credential_file(&invalid, "fixture").is_err());
+    }
+}
+/// Routing settings imported independently of RD Gateway.
+#[derive(Default, Clone, Debug, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
+#[serde(default)]
+pub struct Routing {
+    pub load_balance_info: String,
+    pub use_redirection_server_name: bool,
+}
+
+impl Routing {
+    pub fn validate(&self) -> crate::error::Result<()> {
+        // X.224 has a one-byte length indicator. Leave space for its headers,
+        // the routing-cookie prefix, CRLF and RDP negotiation request.
+        if self.load_balance_info.len() > 200
+            || !self.load_balance_info.is_ascii()
+            || self.load_balance_info.chars().any(char::is_control)
+        {
+            return Err(crate::error::AppError::Validation(
+                "RDP : information de routage invalide (ASCII, 200 octets maximum, sans caractères de contrôle).".into(),
+            ));
+        }
+        Ok(())
     }
 }

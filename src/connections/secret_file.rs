@@ -1,9 +1,15 @@
 //! Short-lived client credential files. Restrict access BEFORE writing any data.
 use crate::error::{AppError, Result};
 use std::io::Write;
-use tempfile::NamedTempFile;
+/// Owns automatic deletion, but no open handle that could conflict with a client.
+pub struct ClientFile(tempfile::TempPath);
+impl ClientFile {
+    pub fn path(&self) -> &std::path::Path {
+        &self.0
+    }
+}
 
-pub fn create(suffix: &str, contents: &[u8]) -> Result<NamedTempFile> {
+pub fn create(suffix: &str, contents: &[u8]) -> Result<ClientFile> {
     let mut file = tempfile::Builder::new()
         .prefix("hostgates-auth-")
         .suffix(suffix)
@@ -14,7 +20,10 @@ pub fn create(suffix: &str, contents: &[u8]) -> Result<NamedTempFile> {
     // tempfile uses 0600 on Unix. On Windows, explicitly replace the inherited DACL.
     file.write_all(contents).map_err(|_| failure())?;
     file.flush().map_err(|_| failure())?;
-    Ok(file)
+    // Close our writable handle BEFORE launching the consumer. Windows clients
+    // may omit FILE_SHARE_WRITE when opening an otherwise readable file.
+    // TempPath retains the private file and removes it when the session drops.
+    Ok(ClientFile(file.into_temp_path()))
 }
 fn failure() -> AppError {
     AppError::Operation("Impossible de préparer un fichier d'authentification protégé.".into())
@@ -122,6 +131,22 @@ pub fn protect_password(password: &str) -> Result<Vec<u8>> {
 
 #[cfg(test)]
 mod tests {
+    #[cfg(windows)]
+    #[test]
+    fn client_can_open_file_without_sharing_write_access() {
+        use std::os::windows::fs::OpenOptionsExt;
+        let file = super::create(".rdp", b"fixture").expect("protected file");
+        // Some Windows clients open configuration files without FILE_SHARE_WRITE.
+        let reader = std::fs::OpenOptions::new()
+            .read(true)
+            .share_mode(1) // FILE_SHARE_READ
+            .open(file.path())
+            .expect("client must be able to open the configuration file");
+        drop(reader);
+        let path = file.path().to_owned();
+        drop(file);
+        assert!(!path.exists());
+    }
     #[test]
     fn temporary_file_is_readable_and_removed() {
         let file = super::create(".test", b"fixture").expect("protected file");

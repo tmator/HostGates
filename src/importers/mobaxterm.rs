@@ -19,6 +19,9 @@ pub fn parse(bytes: &[u8]) -> Preview {
     fn flush(pending: &mut Vec<(usize, String, String)>, folder: &str, preview: &mut Preview) {
         for (line, name, value) in pending.drain(..) {
             let mut row = ImportRow {
+                rdp_routing: Default::default(),
+                rdp_gateway: None,
+                rdp_configuration: false,
                 line,
                 name: name.clone(),
                 folder: folder.into(),

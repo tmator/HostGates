@@ -16,3 +16,5 @@ Le binaire est `target/release/hostgates.exe`. Pour le développement : `cargo r
 Les MSI/setup.exe seront ajoutés en phase 9 avec signature et tests d'installation/désinstallation. La compilation ne constitue pas une validation sur toutes les éditions Windows.
 
 Depuis 0.3.1, installer Strawberry Perl et le rendre disponible dans le PATH avant compilation. OpenSSL est compilé statiquement ; la première compilation est sensiblement plus longue, aucune DLL OpenSSL ni installation Perl requise pour les utilisateurs du binaire.
+
+RDP intégré : conserver également le dossier `vendor/`. Les dépendances cryptographiques Rust nécessitent MSVC et CMake (par exemple le composant CMake des outils C++ Visual Studio).

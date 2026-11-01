@@ -1,12 +1,17 @@
 [package]
 name = "hostgates"
-version = "0.3.7"
+version = "0.4.0"
 edition = "2024"
 rust-version = "1.95"
 description = "Gestionnaire natif de connexions distantes Windows et Linux"
 license = "MIT"
 
 [dependencies]
+sha2 = "0.10"
+ironrdp-client = { path = "vendor/ironrdp-client", features = ["rustls", "gateway"] }
+tokio = { version = "1", features = ["rt", "sync", "time"] }
+ironrdp-pdu = "0.9"
+ironrdp-tls = { version = "0.3", features = ["rustls"] }
 eframe = { version = "0.36.2", default-features = false, features = ["default_fonts", "glow", "wayland", "x11"] }
 serde = { version = "1", features = ["derive"] }
 rusqlite = { version = "0.38", features = ["bundled"] }
@@ -40,6 +45,14 @@ dbus-secret-service-keyring-store = { version = "1", features = ["crypto-rust"] 
 [profile.release]
 lto = "thin"
 strip = true
+
+[dev-dependencies]
+ironrdp-core = "0.2"
+ironrdp-connector = "0.10"
+
+[patch.crates-io]
+ironrdp-pdu = { path = "vendor/ironrdp-pdu" }
+ironrdp-connector = { path = "vendor/ironrdp-connector" }
 
 [lints.clippy]
 unwrap_used = "warn"

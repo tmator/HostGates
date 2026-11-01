@@ -5,6 +5,7 @@ use crate::{
     models::Protocol,
 };
 pub enum TabClient {
+    EmbeddedRdp(Box<crate::connections::embedded_rdp::EmbeddedRdp>),
     Web,
     Terminal(Box<Terminal>, TerminalView),
     Rdp(RdpSession),
@@ -21,16 +22,199 @@ impl SessionTab {
     pub fn closed(&self) -> bool {
         match &self.client {
             TabClient::Web => false,
+            TabClient::EmbeddedRdp(r) => r.closed,
             TabClient::Terminal(t, _) => t.closed,
             TabClient::Rdp(r) => r.closed,
         }
     }
 }
 impl HostGates {
+    pub(super) fn uses_external_rdp(&self, id: &str) -> bool {
+        let global = self.advanced.preferences.default_external_rdp;
+        self.advanced
+            .preferences
+            .sessions
+            .get(id)
+            .map_or(global, |o| o.uses_external_rdp(global))
+    }
+
+    fn workspace_interactive(&self) -> bool {
+        self.editor.is_none()
+            && self.folder_editor.is_none()
+            && !self.catalog_open
+            && !self.settings
+            && !self.unlock_open
+            && !self.about_open
+            && !self.help_open
+            && self.preview.is_none()
+            && !self.export_open
+            && self.error.is_none()
+            && self.advanced.login.is_none()
+            && self.advanced.rename.is_none()
+            && !self.advanced.broadcast
+            && !self.advanced.options_open
+    }
+    pub(super) fn enter_rdp_fullscreen(&mut self, id: String, ctx: &egui::Context) {
+        if self.fullscreen_tab.is_none() {
+            self.restore_fullscreen = ctx.input(|i| i.viewport().fullscreen.unwrap_or(false));
+        }
+        self.fullscreen_tab = Some(id);
+        ctx.send_viewport_cmd(egui::ViewportCommand::Fullscreen(true));
+    }
+    pub(super) fn leave_rdp_fullscreen(&mut self, ctx: &egui::Context) {
+        self.fullscreen_tab = None;
+        ctx.send_viewport_cmd(egui::ViewportCommand::Fullscreen(self.restore_fullscreen));
+    }
+    pub(super) fn fullscreen_workspace(&mut self, ui: &mut egui::Ui) -> bool {
+        let Some(id) = self.fullscreen_tab.clone() else {
+            return false;
+        };
+        let valid = self
+            .tabs
+            .iter()
+            .any(|t| t.id == id && matches!(&t.client, TabClient::EmbeddedRdp(r) if !r.closed));
+        let shortcut = ui.ctx().input_mut(|i| {
+            i.consume_key(
+                egui::Modifiers::CTRL | egui::Modifiers::ALT,
+                egui::Key::Enter,
+            )
+        });
+        if !valid || !self.workspace_interactive() || shortcut {
+            for tab in &mut self.tabs {
+                if let TabClient::EmbeddedRdp(r) = &mut tab.client {
+                    r.release_input();
+                }
+            }
+            self.leave_rdp_fullscreen(ui.ctx());
+            return false;
+        }
+        for tab in &mut self.tabs {
+            if tab.id != id
+                && let TabClient::EmbeddedRdp(r) = &mut tab.client
+            {
+                r.release_input();
+            }
+        }
+        let mut leave = false;
+        egui::CentralPanel::default().show(ui, |ui| {
+            if let Some(tab) = self.tabs.iter_mut().find(|t| t.id == id) {
+                ui.horizontal(|ui| {
+                    ui.label(&tab.title);
+                    leave = ui
+                        .button(crate::i18n::tr("Quitter le plein écran"))
+                        .on_hover_text(crate::i18n::tr("Ctrl+Alt+Entrée"))
+                        .clicked();
+                });
+                if let TabClient::EmbeddedRdp(r) = &mut tab.client {
+                    r.show(ui, !leave);
+                }
+            }
+        });
+        if leave {
+            self.leave_rdp_fullscreen(ui.ctx());
+        }
+        true
+    }
+
     pub(super) fn connect(&mut self, s: &Session, ctx: &egui::Context) {
         self.begin_connect(s, ctx);
     }
+    pub(super) fn connect_embedded_rdp(&mut self, original: &Session, target: &Session) {
+        let password = match super::advanced::saved_password(original) {
+            Ok(p) => p,
+            Err(e) => {
+                self.error = Some(e.to_string());
+                return;
+            }
+        };
+        let mut rdp = crate::connections::embedded_rdp::EmbeddedRdp::new(
+            original.data.clone(),
+            target.data.clone(),
+            password,
+        );
+        rdp.set_routing(
+            self.advanced
+                .preferences
+                .sessions
+                .get(&original.uuid)
+                .map(|o| o.rdp_routing.clone())
+                .unwrap_or_default(),
+        );
+        rdp.set_gateway(
+            self.advanced
+                .preferences
+                .sessions
+                .get(&original.uuid)
+                .and_then(|o| o.rdp_gateway.clone()),
+        );
+        let id = uuid::Uuid::new_v4().to_string();
+        self.active_tab = Some(id.clone());
+        self.tabs.push(SessionTab {
+            id,
+            title: original.data.name.clone(),
+            session: Some(original.clone()),
+            files: None,
+            tunnel: None,
+            client: TabClient::EmbeddedRdp(Box::new(rdp)),
+        });
+    }
     pub(super) fn connect_external(&mut self, s: &Session, ctx: &egui::Context) {
+        if s.data.protocol == Protocol::RDP && !self.uses_external_rdp(&s.uuid) {
+            self.connect_embedded_rdp(s, s);
+            return;
+        }
+        if s.data.protocol == Protocol::RDP
+            && let Some(gateway) = self
+                .advanced
+                .preferences
+                .sessions
+                .get(&s.uuid)
+                .and_then(|o| o.rdp_gateway.clone())
+        {
+            let routing = self
+                .advanced
+                .preferences
+                .sessions
+                .get(&s.uuid)
+                .map(|o| o.rdp_routing.clone())
+                .unwrap_or_default();
+            #[cfg(windows)]
+            let client = RdpSession::launch_gateway_with_routing(
+                &s.data,
+                &self.snapshot.programs.rdp,
+                &gateway,
+                &routing,
+            )
+            .map(TabClient::Rdp);
+            #[cfg(not(windows))]
+            let client = crate::connections::resolve_program(
+                &self.snapshot.programs.rdp,
+                crate::connections::ProgramKind::Rdp,
+            )
+            .and_then(|program| {
+                gateway
+                    .arguments_with_routing(&s.data, &routing)
+                    .and_then(|args| Terminal::launch(&program, &args, ctx.clone()))
+            })
+            .map(|t| TabClient::Terminal(Box::new(t), TerminalView::default()));
+            match client {
+                Ok(client) => {
+                    let id = uuid::Uuid::new_v4().to_string();
+                    self.active_tab = Some(id.clone());
+                    self.tabs.push(SessionTab {
+                        id,
+                        title: s.data.name.clone(),
+                        session: Some(s.clone()),
+                        client,
+                        files: None,
+                        tunnel: None,
+                    });
+                }
+                Err(e) => self.error = Some(e.to_string()),
+            }
+            return;
+        }
+
         if s.data.protocol == Protocol::WEB {
             match crate::connections::web::open(&s.data.hostname) {
                 Ok(()) => self.status = "Lien transmis au navigateur par défaut.".into(),
@@ -291,20 +475,7 @@ impl HostGates {
                 self.advanced.broadcast = true;
             }
         });
-        let interactive = self.editor.is_none()
-            && self.folder_editor.is_none()
-            && !self.catalog_open
-            && !self.settings
-            && !self.unlock_open
-            && !self.about_open
-            && !self.help_open
-            && self.preview.is_none()
-            && !self.export_open
-            && self.error.is_none()
-            && self.advanced.login.is_none()
-            && self.advanced.rename.is_none()
-            && !self.advanced.broadcast
-            && !self.advanced.options_open;
+        let interactive = self.workspace_interactive();
         self.advanced
             .visible
             .retain(|id| choices.iter().any(|(tid, _)| tid == id));
@@ -325,6 +496,13 @@ impl HostGates {
         }
         self.advanced.visible.truncate(self.advanced.panes);
         let ids = self.advanced.visible.clone();
+        for tab in &mut self.tabs {
+            if (!interactive || !ids.contains(&tab.id))
+                && let TabClient::EmbeddedRdp(rdp) = &mut tab.client
+            {
+                rdp.release_input();
+            }
+        }
         let count = ids.len();
         if count == 0 {
             return;
@@ -334,6 +512,7 @@ impl HostGates {
         let rect = ui.available_rect_before_wrap();
         let width = (rect.width() - (cols - 1) as f32 * 6.0) / cols as f32;
         let height = (rect.height() - (rows - 1) as f32 * 6.0) / rows as f32;
+        let mut fullscreen = None;
         let mut reconnect = None;
         let mut switch = None;
         for (index, id) in ids.iter().enumerate() {
@@ -356,7 +535,9 @@ impl HostGates {
                     });
                     if let Some(s)=&tab.session && ui.small_button(crate::i18n::tr("↻")).on_hover_text(tr("Reconnecter / nouvelle connexion")).clicked(){reconnect=Some(s.clone());}
                     if let Some(files)=&mut tab.files && ui.selectable_label(files.open,crate::i18n::tr("SFTP")).clicked(){files.open= !files.open;if files.open&&files.entries.is_empty(){files.send(crate::connections::native::FileAction::List(files.path.clone()));}}
-                    if ui.small_button(tr("Arrêter")).clicked(){match &mut tab.client{TabClient::Terminal(t,_)=>t.stop(),TabClient::Rdp(r)=>r.stop(),TabClient::Web=>{}}tab.tunnel=None;tab.files=None;}
+                    if matches!(&tab.client, TabClient::EmbeddedRdp(r) if !r.closed)
+                        && ui.small_button(tr("Plein écran")).clicked() { fullscreen = Some(id.clone()); }
+                    if ui.small_button(tr("Arrêter")).clicked(){match &mut tab.client{TabClient::Terminal(t,_)=>t.stop(),TabClient::Rdp(r)=>r.stop(),TabClient::EmbeddedRdp(r)=>r.stop(),TabClient::Web=>{}}tab.tunnel=None;tab.files=None;}
                 });
                 if let Some(files)=&mut tab.files && files.open {
                     egui::Panel::right(egui::Id::new(("files",id))).default_size((width*0.4).clamp(180.0,300.0)).size_range(150.0..=400.0).resizable(true).show(ui,|ui|super::advanced::files_ui(ui,files));
@@ -364,6 +545,7 @@ impl HostGates {
                 match &mut tab.client {
                     TabClient::Terminal(t,v)=>{if count>1{v.focus=false;}v.show(ui,t,interactive);},
                     TabClient::Rdp(r)=>{ui.heading(tr("Bureau distant RDP / VNC"));ui.label(crate::i18n::tr(&r.status));ui.label(tr("Le client distant utilise sa propre fenêtre. Utilisez Alt+Tab pour la retrouver."));},
+                    TabClient::EmbeddedRdp(r)=>r.show(ui,interactive),
                     TabClient::Web=>{ui.heading(tr("Tunnel Web actif"));ui.label(tr("Gardez cet onglet ouvert pendant la navigation. Le fermer arrête le tunnel."));}
                 }
             });
@@ -375,6 +557,9 @@ impl HostGates {
                 self.advanced.visible[index] = id.clone();
             }
             self.active_tab = Some(id);
+        }
+        if let Some(id) = fullscreen {
+            self.enter_rdp_fullscreen(id, ui.ctx());
         }
         if let Some(s) = reconnect {
             self.connect(&s, ui.ctx());

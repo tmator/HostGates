@@ -7,7 +7,7 @@ Gestionnaire desktop en Rust natif (egui/eframe), conçu pour Windows et Linux.
 - Sessions SSH/RDP/VNC/Web persistantes, dossiers imbriqués, favoris, tags, recherche, duplication et modification.
 - Terminal SSH intégré via libssh2, avec mode OpenSSH externe facultatif : couleurs ANSI, UTF-8, redimensionnement, sélection, presse-papiers, défilement, recherche du texte visible et reconnexion.
 - Terminal local PowerShell sous Windows, bash/sh sous Linux.
-- RDP via mstsc sous Windows ; FreeRDP sous Linux avec demandes interactives dans l’onglet et bureau dans une fenêtre externe.
+- RDP intégré dans les onglets sous Windows et Linux ; mstsc/FreeRDP externe reste une option. Voir [le guide RDP intégré](docs/RDP_INTEGRATED.md).
 - Import MobaXterm INI/.mxtsessions et CSV : aperçu, sélection, dossiers, erreurs par ligne et gestion des doublons ; transaction atomique.
 - Export CSV MobaXterm documenté et .mxtsessions de base, sans secrets. La compatibilité du format propriétaire avec toutes les versions MobaXterm n’est pas validée ; privilégier CSV.
 - Aide hors ligne avec neuf rubriques, dépannage et raccourcis ; thèmes clair/sombre/système.
@@ -38,7 +38,7 @@ Les dix nouvelles traductions sont automatiques avec corrections ciblées. Le re
 
 ## Télécharger
 
-La [release 0.3.7](https://github.com/tmator/HostGates/releases/tag/v0.3.7) fournit l'exécutable Windows x64, son archive avec documentation et licences, ainsi que les paquets Linux **DEB et RPM pour x86-64**, accompagnés de leurs empreintes SHA-256. Les instructions de [compilation Windows](docs/BUILD_WINDOWS.md) et [compilation Linux](docs/BUILD_LINUX.md) sont disponibles dans la documentation.
+La [release 0.4.0](https://github.com/tmator/HostGates/releases/tag/v0.4.0) fournit l'exécutable Windows x64, son archive avec documentation et licences, ainsi que les paquets Linux **DEB et RPM pour x86-64**, accompagnés de leurs empreintes SHA-256. Les instructions de [compilation Windows](docs/BUILD_WINDOWS.md) et [compilation Linux](docs/BUILD_LINUX.md) sont disponibles dans la documentation.
 
 Pour Linux : **Debian 12+ / Ubuntu 22.04+** (DEB), **RHEL / Rocky / AlmaLinux 9+ et Fedora récent** (RPM). Installation et démarrage graphique de contrôle validés en conteneurs sur Debian 12, Ubuntu 22.04.5, Rocky 9.8 et Fedora 44. RHEL et AlmaLinux restent des cibles de compatibilité sans test direct. Voir le [guide des paquets Linux](docs/LINUX_PACKAGES.md).
 
@@ -46,8 +46,16 @@ Pour Linux : **Debian 12+ / Ubuntu 22.04+** (DEB), **RHEL / Rocky / AlmaLinux 9+
 
 HostGates est sous [licence MIT](licence.md). Voir [licences tierces et compatibilité MobaXterm](docs/LICENSING.md) pour les conditions de redistribution. HostGates est un projet indépendant, sans affiliation à Mobatek.
 
-Fermer les anciennes versions avant de lancer `target/release/HostGates-0.3.7.exe`. Le coffre maître est verrouillé au démarrage et ferme les connexions après 10 minutes sans interaction. Les anciens binaires ne connaissent pas ce coffre : ne pas les utiliser après migration des secrets.
+Fermer les anciennes versions avant de lancer `target/release/HostGates-0.4.0.exe`. Le coffre maître est verrouillé au démarrage et ferme les connexions après 10 minutes sans interaction. Les anciens binaires ne connaissent pas ce coffre : ne pas les utiliser après migration des secrets.
 
 Compilation 0.3.1 : OpenSSL est compilé et lié statiquement avec SSH. Perl et un compilateur C sont nécessaires. Sous Windows, installer Strawberry Perl et le rendre disponible dans le PATH. Sous Linux, installer `perl`, `make` et `build-essential`. Ces outils ne sont pas nécessaires pour exécuter le binaire compilé.
 
 Serveurs SSH anciens : clic droit sur la session → Options SSH / tunnel → Autoriser la clé hôte ssh-rsa (SHA-1, serveur ancien). Cette exception est désactivée par défaut ; voir [les notes 0.3.7](docs/RELEASE_0.3.7.md).
+
+### Import RDP et RD Gateway
+
+Le menu d’import accepte aussi les fichiers `.rdp` (UTF-8 / UTF-16 avec BOM) : adresse, port, utilisateur, domaine et RD Gateway. L’aperçu indique les limites ; les secrets et redirections de périphériques ne sont pas repris. RD Gateway se configure dans les options de session et fonctionne dans les onglets via IronRDP. MSTSC ou FreeRDP restent disponibles en option. Voir [le guide RDP](docs/RDP_INTEGRATED.md).
+
+## Version 0.4.0
+
+RDP intégré avec RD Gateway/RDS, import `.rdp`, plein écran et choix du client par défaut. Voir le [journal des versions](CHANGELOG.md) et les [notes détaillées](docs/RELEASE_0.4.0.md).

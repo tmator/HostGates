@@ -39,10 +39,13 @@ pub struct HostGates {
     settings: bool,
     programs_draft: Option<crate::models::ExternalPrograms>,
     programs_check: Option<String>,
+    rdp_default_draft: Option<bool>,
     path: String,
     vault_ready: bool,
     tabs: Vec<tabs::SessionTab>,
     active_tab: Option<String>,
+    fullscreen_tab: Option<String>,
+    restore_fullscreen: bool,
     catalog_open: bool,
     preview: Option<crate::importers::Preview>,
     importing: bool,
@@ -140,10 +143,13 @@ impl HostGates {
             settings: false,
             programs_draft: None,
             programs_check: None,
+            rdp_default_draft: None,
             path: String::new(),
             vault_ready: false,
             tabs: vec![],
             active_tab: None,
+            fullscreen_tab: None,
+            restore_fullscreen: false,
             catalog_open: false,
             preview: None,
             importing: false,
@@ -189,6 +195,25 @@ impl HostGates {
                         editor.select_created_folder(id);
                     }
                     self.snapshot = update.snapshot;
+                    if !update.rdp_gateways.is_empty() {
+                        for (id, gateway) in update.rdp_gateways {
+                            let options = self.advanced.preferences.sessions.entry(id).or_default();
+                            options.apply_rdp_import(gateway);
+                        }
+                        for (id, routing) in update.rdp_routes {
+                            self.advanced
+                                .preferences
+                                .sessions
+                                .entry(id)
+                                .or_default()
+                                .rdp_routing = routing;
+                        }
+                        if let Err(e) = self.advanced.save() {
+                            self.error = Some(format!(
+                                "Sessions importées, mais paramètres RD Gateway non sauvegardés : {e}"
+                            ));
+                        }
+                    }
                     if let Some((target, gateway)) = update.gateway {
                         self.advanced
                             .preferences
@@ -288,32 +313,35 @@ impl eframe::App for HostGates {
             match &mut tab.client {
                 tabs::TabClient::Terminal(t, _) => t.poll(),
                 tabs::TabClient::Rdp(r) => r.poll(),
+                tabs::TabClient::EmbeddedRdp(r) => r.poll(&ctx),
                 tabs::TabClient::Web => {}
             }
         }
         if !self.tabs.is_empty() {
             ctx.request_repaint_after(std::time::Duration::from_millis(40));
         }
-        egui::Panel::top("header").show(ui, |ui| self.chrome(ui));
-        egui::Panel::bottom("status").show(ui, |ui| {
-            ui.horizontal(|ui| {
-                if self.busy {
-                    ui.spinner();
-                }
-                ui.label(crate::i18n::tr(&self.status));
-                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    ui.label(crate::i18n::tr(&format!(
-                        "{} onglet(s)  |  HostGates {}",
-                        self.tabs.len(),
-                        crate::branding::VERSION
-                    )));
+        if !self.fullscreen_workspace(ui) {
+            egui::Panel::top("header").show(ui, |ui| self.chrome(ui));
+            egui::Panel::bottom("status").show(ui, |ui| {
+                ui.horizontal(|ui| {
+                    if self.busy {
+                        ui.spinner();
+                    }
+                    ui.label(crate::i18n::tr(&self.status));
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        ui.label(crate::i18n::tr(&format!(
+                            "{} onglet(s)  |  HostGates {}",
+                            self.tabs.len(),
+                            crate::branding::VERSION
+                        )));
+                    });
                 });
             });
-        });
-        self.sidebar_panel(ui);
-        egui::CentralPanel::default().show(ui, |ui| {
-            self.workspace(ui);
-        });
+            self.sidebar_panel(ui);
+            egui::CentralPanel::default().show(ui, |ui| {
+                self.workspace(ui);
+            });
+        }
         if self.catalog_open {
             let mut open = true;
             egui::Window::new(crate::i18n::tr("Mes connexions"))

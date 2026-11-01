@@ -8,7 +8,7 @@ Copiez le dossier du projet Windows vers Linux, par exemple dans `~/Documents/Ho
 
 Ne copiez pas `.tools` et `target` : ils contiennent la chaîne de compilation et les fichiers générés sous Windows.
 
-Conservez les sources et fichiers du projet, notamment `Cargo.toml`, `Cargo.lock`, `src/`, `assets/`, `locales/`, `migrations/`, `docs/`, `tests/` et `scripts/`. Le dossier `docs/` est nécessaire car certains textes d’aide sont intégrés lors de la compilation.
+Conservez les sources et fichiers du projet, notamment `Cargo.toml`, `Cargo.lock`, `src/`, `vendor/`, `assets/`, `locales/`, `migrations/`, `docs/`, `tests/` et `scripts/`. Le dossier `docs/` est nécessaire car certains textes d’aide sont intégrés lors de la compilation.
 
 ## 2. Installer les dépendances de compilation
 
@@ -16,7 +16,7 @@ Sur Ubuntu/Debian :
 
 ```bash
 sudo apt update
-sudo apt install build-essential curl pkg-config \
+sudo apt install build-essential curl pkg-config cmake perl \
   libdbus-1-dev libx11-dev libxkbcommon-dev libwayland-dev \
   libegl1-mesa-dev libgl1-mesa-dev libssl-dev zlib1g-dev
 ```

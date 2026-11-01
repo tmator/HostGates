@@ -68,3 +68,8 @@ Desktop.ini
 /docs/STATUS.md
 /docs/GITHUB.md
 /scripts/cargo-local.ps1
+
+*.rpm
+# Public upstream TLS test fixtures; never used by production connections.
+!vendor/ironrdp-mstsgu/tests/certs/server-cert.pem
+!vendor/ironrdp-mstsgu/tests/certs/server-key.pem

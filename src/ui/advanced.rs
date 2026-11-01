@@ -22,13 +22,32 @@ pub struct SessionOptions {
     pub fingerprint: String,
     pub gateway: Option<String>,
     pub external_ssh: bool,
+    pub external_rdp: bool,
+    pub rdp_client_override: Option<bool>,
+    pub rdp_routing: crate::connections::rdp::Routing,
+    pub rdp_gateway: Option<crate::connections::rdp::Gateway>,
     pub legacy_ssh_rsa: bool,
     pub manual_external_auth: bool,
+}
+impl SessionOptions {
+    pub fn uses_external_rdp(&self, global: bool) -> bool {
+        self.rdp_client_override
+            .unwrap_or(self.external_rdp || global)
+    }
+
+    pub(super) fn apply_rdp_import(&mut self, gateway: Option<crate::connections::rdp::Gateway>) {
+        // A replaced session must not keep an older external-client or SSH route.
+        self.external_rdp = false;
+        self.rdp_client_override = None;
+        self.gateway = None;
+        self.rdp_gateway = gateway;
+    }
 }
 #[derive(Default, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Preferences {
     pub language: String,
+    pub default_external_rdp: bool,
     pub sessions: BTreeMap<String, SessionOptions>,
 }
 pub fn data_dir() -> PathBuf {
@@ -187,6 +206,12 @@ impl HostGates {
             .get(&s.uuid)
             .cloned()
             .unwrap_or_default();
+        if options.rdp_gateway.is_some() && options.gateway.is_some() {
+            self.error = Some(
+                "RD Gateway et tunnel SSH ne peuvent pas être combinés dans cette version.".into(),
+            );
+            return;
+        }
         if s.data.protocol != crate::models::Protocol::SSH && options.gateway.is_none() {
             self.connect_external(s, ctx);
             return;
@@ -376,7 +401,13 @@ impl HostGates {
                         }
                     } else {
                         let before = self.tabs.len();
-                        self.connect_external(&c.target, ctx);
+                        if c.session.data.protocol == crate::models::Protocol::RDP
+                            && !self.uses_external_rdp(&c.session.uuid)
+                        {
+                            self.connect_embedded_rdp(&c.session, &c.target);
+                        } else {
+                            self.connect_external(&c.target, ctx);
+                        }
                         if self.tabs.len() > before
                             && let Some(tab) = self.tabs.last_mut()
                         {
@@ -604,6 +635,34 @@ if ui.small_button(crate::i18n::tr("×")).clicked(){login.options.key=PathBuf::n
                 for s in self.snapshot.sessions.iter().filter(|s|s.data.protocol==crate::models::Protocol::SSH&&s.uuid!=self.advanced.options_id){ui.selectable_value(&mut opt.gateway,Some(s.uuid.clone()),&s.data.name);}
             });
             ui.label(crate::i18n::tr("Passerelle SSH pour SSH, RDP, VNC ou Web. Un seul saut ; écoute locale uniquement."));
+            if self.snapshot.sessions.iter().any(|s|s.uuid==self.advanced.options_id && s.data.protocol==crate::models::Protocol::RDP) {
+                if opt.external_rdp && opt.rdp_client_override.is_none() { opt.rdp_client_override = Some(true); }
+                egui::ComboBox::from_id_salt("session_rdp_client").selected_text(crate::i18n::tr(match opt.rdp_client_override {
+                    None => "Utiliser le réglage général", Some(false) => "RDP intégré (IronRDP)", Some(true) => if cfg!(windows) { "RDP (mstsc)" } else { "RDP (FreeRDP)" },
+                })).show_ui(ui, |ui| {
+                    ui.selectable_value(&mut opt.rdp_client_override, None, crate::i18n::tr("Utiliser le réglage général"));
+                    ui.selectable_value(&mut opt.rdp_client_override, Some(false), crate::i18n::tr("RDP intégré (IronRDP)"));
+                    ui.selectable_value(&mut opt.rdp_client_override, Some(true), crate::i18n::tr(if cfg!(windows) { "RDP (mstsc)" } else { "RDP (FreeRDP)" }));
+                });
+                opt.external_rdp = false;
+
+                let mut enabled = opt.rdp_gateway.is_some();
+                if ui.checkbox(&mut enabled, crate::i18n::tr("Utiliser une passerelle RD Gateway")).changed() {
+                    opt.rdp_gateway = enabled.then(Default::default);
+                }
+                if let Some(gateway) = &mut opt.rdp_gateway {
+                    ui.label(crate::i18n::tr("Adresse RD Gateway (hôte:port, 443 par défaut)"));
+                    ui.text_edit_singleline(&mut gateway.host);
+                    ui.checkbox(&mut gateway.rpc_transport, crate::i18n::tr("Utiliser directement RPC sur HTTPS (RPCH)"));
+                    ui.label(crate::i18n::tr("Utilisateur de la passerelle (facultatif)"));
+                    ui.text_edit_singleline(&mut gateway.username);
+                    ui.horizontal(|ui| {
+                        ui.selectable_value(&mut gateway.usage, 1, crate::i18n::tr("Toujours utiliser la passerelle"));
+                        ui.selectable_value(&mut gateway.usage, 2, crate::i18n::tr("Passerelle si connexion directe impossible"));
+                    });
+                    ui.small(crate::i18n::tr("RD Gateway fonctionne dans les onglets. Le client externe reste optionnel."));
+                }
+ }
             ui.checkbox(&mut opt.manual_external_auth, crate::i18n::tr("Saisir le mot de passe dans le client externe (RDP / VNC)"));
             if self.snapshot.sessions.iter().any(|s|s.uuid==self.advanced.options_id&&s.data.protocol==crate::models::Protocol::SSH){ui.checkbox(&mut opt.external_ssh,crate::i18n::tr("Utiliser OpenSSH externe (sans volet SFTP intégré)"));
                 ui.checkbox(&mut opt.legacy_ssh_rsa, crate::i18n::tr("Autoriser la clé hôte ssh-rsa (SHA-1, serveur ancien)"));
@@ -613,6 +672,20 @@ if ui.small_button(crate::i18n::tr("×")).clicked(){login.options.key=PathBuf::n
             save=!self.busy && (ui.add_enabled(!self.busy,egui::Button::new(crate::i18n::tr("Enregistrer"))).clicked() || super::shortcuts::submitted(ctx,"options"));
         });
         if save {
+            if let Some(gateway) = &self.advanced.options.rdp_gateway {
+                if let Err(e) = gateway.validate() {
+                    self.error = Some(e.to_string());
+                    return;
+                }
+                if self.advanced.options.gateway.is_some() || self.advanced.gateway_draft.is_some()
+                {
+                    self.error = Some(
+                        "RD Gateway et tunnel SSH ne peuvent pas être combinés dans cette version."
+                            .into(),
+                    );
+                    return;
+                }
+            }
             if let Some(draft) = &self.advanced.gateway_draft {
                 let data = crate::models::SessionInput {
                     name: format!(
@@ -832,4 +905,51 @@ pub fn files_ui(ui: &mut egui::Ui, files: &mut FileBrowser) {
     ui.small(crate::i18n::tr(
         "Aucun écrasement automatique. Les liens symboliques sont refusés.",
     ));
+}
+
+#[cfg(test)]
+mod rdp_preference_tests {
+    use super::*;
+    #[test]
+    fn existing_preferences_enable_embedded_rdp_and_external_choice_persists() {
+        let options: SessionOptions = serde_json::from_str("{}").expect("old preferences");
+        assert!(!options.external_rdp);
+        let options = SessionOptions {
+            external_rdp: true,
+            ..Default::default()
+        };
+        let saved = serde_json::to_string(&options).expect("serialize");
+        assert!(
+            serde_json::from_str::<SessionOptions>(&saved)
+                .expect("reload")
+                .external_rdp
+        );
+    }
+}
+#[test]
+fn global_rdp_selection_can_be_overridden_and_survives_reload() {
+    let old: Preferences = serde_json::from_str("{}").expect("valid preferences test fixture");
+    assert!(!old.default_external_rdp);
+    let mut options = SessionOptions::default();
+    assert!(options.uses_external_rdp(true));
+    assert!(!options.uses_external_rdp(false));
+    options.rdp_client_override = Some(false);
+    assert!(!options.uses_external_rdp(true));
+    options.rdp_client_override = Some(true);
+    assert!(options.uses_external_rdp(false));
+    let legacy: SessionOptions =
+        serde_json::from_str(r#"{"external_rdp":true}"#).expect("valid preferences test fixture");
+    assert!(legacy.uses_external_rdp(false));
+    let mut prefs = Preferences {
+        default_external_rdp: true,
+        ..Default::default()
+    };
+    options.rdp_client_override = Some(false);
+    prefs.sessions.insert("fixture".into(), options);
+    let restored: Preferences = serde_json::from_str(
+        &serde_json::to_string(&prefs).expect("valid preferences test fixture"),
+    )
+    .expect("valid preferences test fixture");
+    assert!(restored.default_external_rdp);
+    assert!(!restored.sessions["fixture"].uses_external_rdp(restored.default_external_rdp));
 }

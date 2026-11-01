@@ -38,6 +38,8 @@ pub enum Action {
     Programs(crate::models::ExternalPrograms),
 }
 pub struct Update {
+    pub rdp_routes: Vec<(String, crate::connections::rdp::Routing)>,
+    pub rdp_gateways: Vec<(String, Option<crate::connections::rdp::Gateway>)>,
     pub gateway: Option<(String, String)>,
     pub warning: Option<String>,
     pub session_folder: Option<String>,
@@ -115,6 +117,8 @@ impl Worker {
             };
             for action in requests {
                 let result = (|| -> Result<Update> {
+                    let mut rdp_gateways = vec![];
+                    let mut rdp_routes = vec![];
                     let mut saved_id = None;
                     let mut gateway = None;
                     let mut warning = None;
@@ -173,7 +177,10 @@ impl Worker {
                             "Aperçu prêt : vérifiez la sélection et les doublons."
                         }
                         Action::Import(data) => {
-                            custom_message = Some(service.db.import(&data)?.summary());
+                            let report = service.db.import(&data)?;
+                            custom_message = Some(report.summary());
+                            rdp_gateways = report.rdp_gateways;
+                            rdp_routes = report.rdp_routes;
                             "Import terminé."
                         }
                         Action::Export(file, ids, format) => {
@@ -248,6 +255,8 @@ impl Worker {
                         }
                     };
                     Ok(Update {
+                        rdp_routes,
+                        rdp_gateways,
                         gateway,
                         warning,
                         session_folder,
