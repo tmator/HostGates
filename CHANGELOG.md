@@ -1,5 +1,11 @@
 # Journal des versions
 
+## 0.9.0-beta.2 — 8 novembre 2026 (bêta)
+
+- Gestion des hôtes et clusters Hyper-V depuis Linux via WinRM HTTPS et Python/pypsrp : inventaire, états et actions d’alimentation.
+- Consoles Hyper-V sous Linux via FreeRDP : résolution du nœud propriétaire, authentification du profil par entrée standard et validation des certificats.
+- Chemins Python/FreeRDP et CA WinRM configurables par profil ; documentation et aide actualisées.
+
 ## 0.9.0-beta.1 — 8 novembre 2026 (bêta)
 
 - Une erreur SPICE/LXC ne rend plus l’inventaire entier inconnu et ne bloque plus les autres consoles. Les erreurs d’inventaire restent distinctes ; une action d’alimentation incertaine ne concerne que sa machine cible.

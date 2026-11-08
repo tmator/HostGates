@@ -12,9 +12,43 @@ Dans le panneau latéral **Proxmox / Hyper-V**, choisissez **Ajouter un serveur*
 - `http://hv01.example.test:5985` est disponible pour une infrastructure WinRM existante avec authentification Negotiate (Kerberos en domaine lorsque possible). Basic n’est pas utilisé. Privilégiez HTTPS, notamment hors domaine. Aucune exception de certificat WinRM n’est créée par HostGates.
 - Le double-clic ouvre **VMConnect dans une fenêtre externe**. Installez les outils de gestion Hyper-V Windows. Le chemin `vmconnect.exe` peut être sélectionné dans le profil ; par défaut, HostGates cherche dans `Windows/System32`.
 - **VMConnect utilise le compte Windows courant**, qui doit être autorisé sur l’hôte, même si un autre compte est enregistré pour l’inventaire et les commandes. Aucun mot de passe n’est placé dans ses arguments.
-- L’inventaire, les commandes et VMConnect Hyper-V sont actuellement disponibles sous **Windows uniquement**. Les profils restent lisibles sous Linux ; le connecteur signale cette limite. Proxmox reste utilisable sous Windows et Linux.
+- Sous Linux, le même inventaire et les mêmes actions utilisent l’adaptateur pypsrp et les consoles FreeRDP décrits ci-dessous. VMConnect reste propre à Windows.
 
 Les machines sont ciblées par leur GUID. HostGates relit l’inventaire avant l’action pour retrouver le propriétaire actuel après une migration. En cas de nœud inaccessible, la lecture échoue explicitement : les anciens états ne sont pas considérés comme fiables et les actions sont désactivées jusqu’à une actualisation réussie.
+
+
+## Hyper-V depuis Linux
+
+Le même profil et les mêmes actions sont disponibles sous Linux. HostGates reste une application Rust ; un adaptateur Python embarqué dans le binaire utilise **pypsrp 0.8.x (>=0.8.1)** pour WinRM. Aucun PowerShell local ni agent HostGates sur Windows n’est nécessaire. Cette première intégration utilise **NTLM sur HTTPS uniquement** ; les domaines interdisant NTLM ne sont pas encore pris en charge sous Linux.
+
+### Dépendances du poste
+
+Installer Python 3, son module venv et FreeRDP. Sous Debian/Ubuntu, les paquets sont `python3`, `python3-venv` et, selon la version de la distribution, `freerdp2-x11` ou `freerdp3-x11`. Sous Fedora/Rocky, installer Python et le paquet FreeRDP disponible dans les dépôts du système. Ne pas utiliser `sudo pip`.
+
+Créer un environnement dédié :
+
+```bash
+python3 -m venv "$HOME/.local/share/hostgates/hyperv-venv"
+"$HOME/.local/share/hostgates/hyperv-venv/bin/python" -m pip install 'pypsrp>=0.8.1,<0.9'
+```
+
+Dans **Modifier le serveur → Hyper-V**, sélectionner le chemin absolu de `hyperv-venv/bin/python` dans **Python (pypsrp)** et celui de `xfreerdp3` ou `xfreerdp` dans **FreeRDP (Hyper-V)**. Les champs vides recherchent `python3`, puis `xfreerdp3`/`xfreerdp` dans le PATH. Les chemins Windows VMConnect et Linux sont conservés séparément. Les dépendances ne sont pas installées automatiquement ; elles ne sont pas nécessaires à SSH, RDP classique ou Proxmox.
+
+### Configuration des hôtes
+
+- WinRM **HTTPS**, généralement `https://hv01.example.test:5986`, doit être configuré sur chaque nœud avec un certificat dont le nom correspond au DNS utilisé. HTTP est refusé par l’adaptateur Linux.
+- Renseigner `DOMAINE\utilisateur`, `utilisateur@domaine` ou `HOTE\utilisateur` pour un compte local. Le compte doit disposer des droits WinRM et Hyper-V ; les mêmes modules serveur que sous Windows sont nécessaires.
+- Pour une autorité privée, choisir le fichier **Certificat CA PEM** dans le profil. Ce fichier concerne WinRM, et s’applique à chaque nœud du cluster. Il n’y a pas de désactivation de validation TLS.
+- Autoriser l’accès au port **2179** du nœud pour la console VMConnect/FreeRDP et les droits de console Hyper-V du compte. Le certificat de ce service est distinct de celui de WinRM : FreeRDP utilise son magasin de confiance/système. Faire approuver ce certificat par l’administrateur ; le CA WinRM du profil n’est pas transmis à FreeRDP. Les certificats non approuvés sont refusés sans acceptation automatique.
+- En cluster, tous les nœuds doivent être accessibles directement, avec le même compte et port WinRM. HostGates inventorie les nœuds depuis le poste Linux, sans déléguer le mot de passe d’un hôte vers un autre. L’hôte propriétaire est relu avant une console ou une action. Une migration pendant l’opération peut encore imposer une actualisation.
+
+Le double-clic ouvre **une fenêtre FreeRDP externe**, suivie par un onglet HostGates. Il utilise l’hôte et le GUID Hyper-V, sans dépendre d’un serveur RDP ou de l’adresse IP de la VM. Le mot de passe du profil est transmis par un pipe privé, jamais par `/p:`. Fermer l’onglet ou verrouiller le coffre ferme le processus console. Une erreur immédiate peut signaler un certificat de console non approuvé, un port fermé, des droits insuffisants ou un client FreeRDP incompatible. Pour diagnostiquer manuellement, utiliser FreeRDP avec `/v:hote:2179 /vmconnect:GUID /u:utilisateur /d:DOMAINE` et saisir le mot de passe dans son invite, sans l’ajouter à la commande.
+
+Les états et actions d’alimentation suivent les mêmes règles qu’avec Windows. Aucune commande ayant échoué n’est relancée automatiquement. Après un délai dépassé, une action distante peut encore se terminer : actualiser avant de recommencer.
+
+Tests : `python tests/hyperv_linux_test.py` vérifie le routage et les actions sans serveur réel ; `python tests/hyperv_transport_test.py` nécessite pypsrp et OpenSSL et teste le transport HTTPS local. Ces tests ne remplacent pas une validation des authentifications et consoles sur votre infrastructure Hyper-V.
+
+Références : [pypsrp](https://github.com/jborean93/pypsrp), [FreeRDP](https://github.com/FreeRDP/FreeRDP/wiki/CommandLineInterface).
 
 ## États et commandes
 

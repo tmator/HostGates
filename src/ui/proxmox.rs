@@ -304,7 +304,7 @@ enum Completed {
     Vms(Vec<Vm>),
     Power(Vec<Vm>, String),
     LxcConsole(Box<crate::connections::proxmox_terminal::Console>, String),
-    HyperConsole(Vm, std::path::PathBuf),
+    HyperConsole(Vm, crate::hyperv::ConsoleLaunch),
     Console(SpiceConfig, String, std::path::PathBuf, Instant),
 }
 #[derive(Default)]
@@ -674,10 +674,8 @@ impl HostGates {
                                     .into_iter()
                                     .next()
                                     .ok_or(AppError::NotFound)?;
-                            Ok(Completed::HyperConsole(
-                                fresh,
-                                crate::hyperv::console_program(&server)?,
-                            ))
+                            let plan = crate::hyperv::console_launch(&server, &fresh, &secret)?;
+                            Ok(Completed::HyperConsole(fresh, plan))
                         }
                         Operation::Power(vm, action) => {
                             crate::hyperv::run(&server, &secret, action.api_name(), &vm.native_id)?;
@@ -768,11 +766,7 @@ impl HostGates {
                     });
                 }
                 Ok(Completed::HyperConsole(vm, program)) => {
-                    match crate::connections::rdp::RdpSession::launch_external(
-                        &program,
-                        vec![vm.node, "-G".into(), vm.native_id],
-                        "Hyper-V",
-                    ) {
+                    match crate::connections::rdp::RdpSession::launch_hyperv(program) {
                         Ok(client) => {
                             let tab_id = uuid::Uuid::new_v4().to_string();
                             self.active_tab = Some(tab_id.clone());
@@ -953,7 +947,7 @@ impl HostGates {
                         if ui.selectable_value(&mut draft.server.hyperv, false, "Proxmox").changed() { draft.server.url = "https://".into(); draft.server.skip_tls_verification = false; }
                         if ui.selectable_value(&mut draft.server.hyperv, true, "Hyper-V").changed() { draft.server.url = "https://".into(); draft.server.skip_tls_verification = false; draft.server.auth = AuthMode::Password; }
                     });
-                    ui.label(if draft.server.hyperv { "WinRM : https://hote:5986 (HTTP/Kerberos : http://hote:5985)" } else { "URL HTTPS (https://pve.example:8006)" });
+                    ui.label(if draft.server.hyperv { if cfg!(windows) { "WinRM : https://hote:5986 (HTTP/Kerberos : http://hote:5985)" } else { "WinRM HTTPS : https://hote:5986 (NTLM)" } } else { "URL HTTPS (https://pve.example:8006)" });
                     ui.text_edit_singleline(&mut draft.server.url);
                     if !draft.server.hyperv { ui.horizontal(|ui| {
                         ui.selectable_value(
@@ -984,13 +978,19 @@ impl HostGates {
                     );
                     if draft.server.hyperv {
                         ui.checkbox(&mut draft.server.cluster, crate::i18n::tr("Lister tout le cluster depuis cet hôte"));
+                        #[cfg(windows)]
+                        {
                         ui.small(crate::i18n::tr("WinRM et les modules Hyper-V / FailoverClusters doivent être configurés sur les hôtes. VMConnect utilise le compte Windows courant."));
-                        ui.label("VMConnect.exe");
-                        ui.horizontal(|ui| {
-                            ui.label(draft.server.vmconnect.display().to_string());
-                            if ui.button(crate::i18n::tr("Parcourir…")).clicked() && let Some(path) = rfd::FileDialog::new().add_filter("EXE", &["exe"]).pick_file() { draft.server.vmconnect = path; }
-                            if ui.button(crate::i18n::tr("Effacer")).clicked() { draft.server.vmconnect.clear(); }
-                        });
+                        program_picker(ui, "VMConnect.exe", &mut draft.server.vmconnect);
+                        }
+                        #[cfg(not(windows))]
+                        {
+                        ui.small(crate::i18n::tr("Linux : WinRM HTTPS, Python avec pypsrp et FreeRDP sont requis. Consultez l’aide Hyper-V."));
+                        program_picker(ui, "Python (pypsrp)", &mut draft.server.hyperv_python);
+                        program_picker(ui, "FreeRDP (Hyper-V)", &mut draft.server.hyperv_freerdp);
+                        program_picker(ui, &crate::i18n::tr("Certificat CA PEM (facultatif)"), &mut draft.server.ca_file);
+                        }
+
                     } else {
                     ui.checkbox(&mut draft.server.skip_tls_verification, crate::i18n::tr("Ne pas vérifier le certificat HTTPS"));
                     if draft.server.skip_tls_verification {
@@ -1155,4 +1155,19 @@ fn vm_state_color(vm: &Vm, stale: bool) -> egui::Color32 {
         "stopped" => egui::Color32::from_rgb(220, 55, 55),
         _ => egui::Color32::from_rgb(240, 145, 35),
     }
+}
+
+fn program_picker(ui: &mut egui::Ui, label: &str, path: &mut std::path::PathBuf) {
+    ui.label(label);
+    ui.horizontal(|ui| {
+        ui.label(path.display().to_string());
+        if ui.button(crate::i18n::tr("Parcourir…")).clicked()
+            && let Some(selected) = rfd::FileDialog::new().pick_file()
+        {
+            *path = selected;
+        }
+        if ui.button(crate::i18n::tr("Effacer")).clicked() {
+            path.clear();
+        }
+    });
 }

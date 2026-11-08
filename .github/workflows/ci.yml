@@ -17,6 +17,12 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y perl make pkg-config libdbus-1-dev libx11-dev libxkbcommon-dev libwayland-dev libegl1-mesa-dev libgl1-mesa-dev
       - run: cargo fmt -- --check
       - run: python scripts/check-locales.py
+      - run: python tests/hyperv_linux_test.py
+      - if: runner.os == 'Linux'
+        run: |
+          python3 -m venv /tmp/hostgates-hyperv-test
+          /tmp/hostgates-hyperv-test/bin/pip install 'pypsrp>=0.8.1,<0.9'
+          /tmp/hostgates-hyperv-test/bin/python tests/hyperv_transport_test.py
       - run: cargo test --locked
       - run: cargo clippy --all-targets --locked -- -D warnings
       - run: cargo build --release --locked

@@ -302,6 +302,46 @@ impl RdpSession {
             })
         }
     }
+    pub fn launch_hyperv(plan: crate::hyperv::ConsoleLaunch) -> Result<Self> {
+        let Some(password) = plan.password else {
+            return Self::launch_external(&plan.program, plan.args, "Hyper-V");
+        };
+        use std::io::Write;
+        if password.is_empty() || password.len() > 16_384 || password.contains(['\r', '\n', '\0']) {
+            return Err(AppError::Validation(
+                "Hyper-V : mot de passe invalide pour FreeRDP.".into(),
+            ));
+        }
+        let mut child = Command::new(plan.program)
+            .args(plan.args)
+            .arg("/from-stdin:force")
+            .stdin(std::process::Stdio::piped())
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .spawn()
+            .map_err(|_| AppError::Operation("Impossible de lancer FreeRDP.".into()))?;
+        let result = child
+            .stdin
+            .take()
+            .ok_or_else(|| std::io::Error::other("stdin unavailable"))
+            .and_then(|mut pipe| {
+                pipe.write_all(password.as_bytes())
+                    .and_then(|_| pipe.write_all(b"\n"))
+            });
+        if result.is_err() {
+            let _ = child.kill();
+            let _ = child.wait();
+            return Err(AppError::Operation(
+                "Impossible de transmettre le mot de passe à FreeRDP.".into(),
+            ));
+        }
+        Ok(Self {
+            child,
+            credential_file: None,
+            status: "Console Hyper-V ouverte dans FreeRDP".into(),
+            closed: false,
+        })
+    }
     pub fn launch_external(
         program: &std::path::Path,
         args: Vec<String>,
