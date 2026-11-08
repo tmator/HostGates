@@ -10,6 +10,8 @@ pub struct Outcome {
     pub action: Option<Action>,
 }
 pub struct SessionEditor {
+    resolution_loaded: bool,
+    resolution: Option<(u16, u16)>,
     id: Option<String>,
     data: SessionInput,
     tags: String,
@@ -38,6 +40,8 @@ impl SessionEditor {
     }
     pub fn from_data(data: SessionInput) -> Self {
         Self {
+            resolution_loaded: false,
+            resolution: None,
             id: None,
             tags: data.tags.join(", "),
             new_folder: None,
@@ -46,6 +50,16 @@ impl SessionEditor {
             secret_open: false,
             save_password: false,
             error: None,
+        }
+    }
+    pub fn load_resolution(&mut self, preferences: &super::advanced::Preferences) {
+        if !self.resolution_loaded {
+            self.resolution = self
+                .id
+                .as_ref()
+                .and_then(|id| preferences.sessions.get(id))
+                .and_then(|o| o.embedded_resolution);
+            self.resolution_loaded = true;
         }
     }
     pub fn select_created_folder(&mut self, id: String) {
@@ -97,6 +111,11 @@ impl SessionEditor {
                     if self.data.protocol!=Protocol::WEB { ui.label(crate::i18n::tr("Port *"));ui.add(egui::DragValue::new(&mut self.data.port).range(1..=65535));ui.end_row(); }
                     ui.label(crate::i18n::tr("Utilisateur"));ui.text_edit_singleline(&mut self.data.username);ui.end_row();
                     if self.data.protocol==Protocol::RDP {ui.label(crate::i18n::tr("Domaine"));ui.text_edit_singleline(&mut self.data.domain);ui.end_row();}
+                    if self.data.protocol == Protocol::RDP {
+                        ui.label(crate::i18n::tr("Résolution IronRDP"));
+                        super::rdp_display::embedded_resolution_selector(ui, &mut self.resolution);
+                        ui.end_row();
+                    }
                     ui.label(crate::i18n::tr("Dossier"));ui.vertical(|ui| {
                         folder_select(ui,"session_folder",&mut self.data.folder_id,folders,None);
                         if self.new_folder.is_none() && ui.button(crate::i18n::tr("+ Nouveau dossier…")).clicked() { self.new_folder = Some(String::new()); }
@@ -145,6 +164,15 @@ impl SessionEditor {
                     if ui.button(crate::i18n::tr("Annuler")).clicked(){out.close=true;}
                 });
             });
+        });
+        out.action = out.action.map(|action| match action {
+            Action::SaveSession(id, data) if data.protocol == Protocol::RDP => {
+                Action::SaveSessionResolution(id, data, None, self.resolution)
+            }
+            Action::SaveSessionSecret(id, data, secret) if data.protocol == Protocol::RDP => {
+                Action::SaveSessionResolution(id, data, Some(secret), self.resolution)
+            }
+            other => other,
         });
         out.close |= !open;
         out
@@ -249,4 +277,52 @@ fn folder_path(folder: &Folder, folders: &[Folder]) -> String {
     }
     names.reverse();
     names.join(" / ")
+}
+
+#[cfg(test)]
+mod resolution_tests {
+    use super::*;
+    #[test]
+    fn creation_and_editing_keep_resolution_in_save_request() {
+        let preview = crate::importers::rdp::parse(
+            b"full address:s:desktop.example\nusername:s:alice",
+            "fixture",
+        )
+        .expect("parse");
+        let data = preview.rows[0].data.clone().expect("data");
+        let mut editor = SessionEditor::from_data(data.clone());
+        editor.resolution = Some((1920, 1080));
+        editor.resolution_loaded = true;
+        let ctx = egui::Context::default();
+        let mut action = None;
+        let mut out = ctx.run_ui(Default::default(), |ui| {
+            ui.ctx()
+                .data_mut(|d| d.insert_temp(egui::Id::new("dialog_submit"), "editor".to_string()));
+            action = editor.show(ui.ctx(), &[], false, false).action;
+        });
+        out.textures_delta.clear();
+        assert!(matches!(
+            action,
+            Some(Action::SaveSessionResolution(
+                None,
+                _,
+                None,
+                Some((1920, 1080))
+            ))
+        ));
+        let mut prefs = super::super::advanced::Preferences::default();
+        prefs
+            .sessions
+            .entry("fixture".into())
+            .or_default()
+            .embedded_resolution = Some((2560, 1440));
+        let bytes = serde_json::to_vec(&prefs).expect("serialize");
+        let restored = serde_json::from_slice(&bytes).expect("reload");
+        let mut editor = SessionEditor::from_data(data);
+        editor.id = Some("fixture".into());
+        editor.load_resolution(&restored);
+        assert_eq!(editor.resolution, Some((2560, 1440)));
+        let old: super::super::advanced::SessionOptions = serde_json::from_str("{}").expect("old");
+        assert_eq!(old.embedded_resolution, None);
+    }
 }

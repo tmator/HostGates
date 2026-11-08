@@ -14,6 +14,7 @@ fn settings_survive_reopen_and_reset() {
         .expect("test fixture must be valid")
         .to_owned();
     let programs = ExternalPrograms {
+        spice: exe.clone(),
         ssh: exe.clone(),
         rdp: exe.clone(),
         vnc: exe.clone(),
@@ -58,6 +59,7 @@ fn invalid_override_never_falls_back_and_save_is_atomic() {
     for invalid in ["missing-client", "./ssh", "ssh -v", "\"ssh\"", "bad\npath"] {
         assert!(resolve_program(invalid, ProgramKind::Ssh).is_err());
         let updated = ExternalPrograms {
+            spice: String::new(),
             ssh: String::new(),
             rdp: invalid.into(),
             vnc: String::new(),

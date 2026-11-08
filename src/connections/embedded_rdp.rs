@@ -25,6 +25,7 @@ struct CertificatePrompt {
     reply: mpsc::SyncSender<bool>,
 }
 pub struct EmbeddedRdp {
+    requested_resolution: (u16, u16),
     gateway: Option<super::rdp::Gateway>,
     gateway_password: Secret,
     routing: super::rdp::Routing,
@@ -63,6 +64,7 @@ impl EmbeddedRdp {
     pub fn new(identity: SessionInput, target: SessionInput, password: Secret) -> Self {
         let (cert_tx, cert_rx) = mpsc::sync_channel(1);
         Self {
+            requested_resolution: (1280, 720),
             gateway: None,
             gateway_password: Secret::new(String::new()),
             routing: Default::default(),
@@ -92,6 +94,13 @@ impl EmbeddedRdp {
             closed: false,
             status: String::new(),
         }
+    }
+    pub fn set_resolution(&mut self, resolution: Option<(u16, u16)>) -> crate::error::Result<()> {
+        let (width, height) = resolution.unwrap_or((1280, 720));
+        super::rdp::DisplaySize::Fixed { width, height }.validate()?;
+        self.requested_resolution = (width, height);
+        self.dimensions = [width as usize, height as usize];
+        Ok(())
     }
     pub fn set_routing(&mut self, routing: super::rdp::Routing) {
         self.routing = routing;
@@ -312,8 +321,8 @@ impl EmbeddedRdp {
             .with_username(self.identity.username.clone())
             .with_domain(self.identity.domain.clone())
             .with_password(self.password.to_string())
-            .with_desktop_width(1280)
-            .with_desktop_height(720)
+            .with_desktop_width(self.requested_resolution.0)
+            .with_desktop_height(self.requested_resolution.1)
             .with_client_name("HostGates")
             .with_client_build(26000)
             .with_client_dir("HostGates")
@@ -821,6 +830,30 @@ mod tests {
         assert!(tab.closed, "loopback failure must return");
         assert!(tab.status.contains("caused by:"), "{}", tab.status);
         assert_ne!(tab.status, "RDP : [GW connect] custom error");
+    }
+    #[test]
+    fn configured_resolution_reaches_direct_and_gateway_negotiation() {
+        let preview=crate::importers::rdp::parse(b"full address:s:desktop.example\nusername:s:alice\ndomain:s:LAB\ngatewayhostname:s:gw.example", "fixture").expect("parse");
+        let row = &preview.rows[0];
+        let data = row.data.clone().expect("data");
+        let mut tab = EmbeddedRdp::new(data.clone(), data, Secret::new(String::new()));
+        for gateway in [None, row.rdp_gateway.clone()] {
+            tab.set_gateway(gateway);
+            tab.set_resolution(Some((2560, 1440))).expect("resolution");
+            let config = tab.build_config().expect("config");
+            assert_eq!(config.connector().desktop_size.width, 2560);
+            assert_eq!(config.connector().desktop_size.height, 1440);
+            tab.dimensions = [640, 480]; // server framebuffer updates must not overwrite the next requested size
+            assert_eq!(
+                tab.build_config()
+                    .expect("reconnect")
+                    .connector()
+                    .desktop_size
+                    .width,
+                2560
+            );
+        }
+        assert!(tab.set_resolution(Some((65535, 65535))).is_err());
     }
     #[test]
     fn gateway_config_keeps_two_identities_target_port_and_clears_secrets() {

@@ -24,6 +24,8 @@ pub struct SessionOptions {
     pub external_ssh: bool,
     pub external_rdp: bool,
     pub rdp_client_override: Option<bool>,
+    pub embedded_resolution: Option<(u16, u16)>,
+    pub rdp_display: crate::connections::rdp::DisplaySize,
     pub rdp_routing: crate::connections::rdp::Routing,
     pub rdp_gateway: Option<crate::connections::rdp::Gateway>,
     pub legacy_ssh_rsa: bool,
@@ -46,6 +48,7 @@ impl SessionOptions {
 #[derive(Default, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Preferences {
+    pub proxmox_servers: Vec<crate::proxmox::Server>,
     pub language: String,
     pub default_external_rdp: bool,
     pub sessions: BTreeMap<String, SessionOptions>,
@@ -93,6 +96,7 @@ pub struct Connected {
     pub target: Session,
 }
 pub struct Advanced {
+    pub rdp_launch: Option<(Session, crate::connections::rdp::DisplaySize)>,
     pub last_activity: std::time::Instant,
     pub preferences: Preferences,
     pub login: Option<Login>,
@@ -114,6 +118,7 @@ pub struct Advanced {
 impl Default for Advanced {
     fn default() -> Self {
         Self {
+            rdp_launch: None,
             last_activity: std::time::Instant::now(),
             preferences: Preferences::default(),
             login: None,
@@ -185,9 +190,11 @@ impl HostGates {
         let ready = crate::credentials::master::shared()
             .is_some_and(|v| v.0.try_lock().is_ok_and(|v| v.configured() && v.ready()));
         if ready {
+            self.proxmox.clear_pending();
             self.tabs.clear();
             self.active_tab = None;
             self.advanced.login = None;
+            self.advanced.rdp_launch = None;
             self.advanced.pending = None;
             self.advanced.master = Zeroizing::new(String::new());
             self.advanced.confirmation = Zeroizing::new(String::new());
@@ -196,6 +203,30 @@ impl HostGates {
     }
 
     pub(super) fn begin_connect(&mut self, s: &Session, ctx: &egui::Context) {
+        if self.advanced.pending.is_some() || self.advanced.rdp_launch.is_some() {
+            return;
+        }
+        if s.data.protocol == crate::models::Protocol::RDP && self.uses_external_rdp(&s.uuid) {
+            let display = self
+                .advanced
+                .preferences
+                .sessions
+                .get(&s.uuid)
+                .map(|o| o.rdp_display)
+                .unwrap_or_default();
+            self.advanced.rdp_launch = Some((
+                s.clone(),
+                if display.validate().is_ok() {
+                    display
+                } else {
+                    Default::default()
+                },
+            ));
+            return;
+        }
+        self.begin_connect_after_display(s, ctx);
+    }
+    pub(super) fn begin_connect_after_display(&mut self, s: &Session, ctx: &egui::Context) {
         if self.advanced.pending.is_some() {
             return;
         }
@@ -348,6 +379,7 @@ impl HostGates {
         });
     }
     pub(super) fn advanced_dialogs(&mut self, ctx: &egui::Context) {
+        self.rdp_display_dialog(ctx);
         let result = self
             .advanced
             .pending
@@ -590,7 +622,15 @@ if ui.small_button(crate::i18n::tr("×")).clicked(){login.options.key=PathBuf::n
                         std::mem::replace(&mut self.advanced.master, Zeroizing::new(String::new()));
                     self.advanced.confirmation = Zeroizing::new(String::new());
                     self.send(if !configured {
-                        Action::CreateVault(secret)
+                        Action::CreateVault(
+                            secret,
+                            self.advanced
+                                .preferences
+                                .proxmox_servers
+                                .iter()
+                                .filter_map(|s| s.credential_id.clone())
+                                .collect(),
+                        )
                     } else if !ready {
                         Action::UnlockVault(secret)
                     } else {
@@ -606,6 +646,7 @@ if ui.small_button(crate::i18n::tr("×")).clicked(){login.options.key=PathBuf::n
             {
                 self.advanced.pending = None;
                 self.tabs.clear();
+                self.proxmox.clear_pending();
                 self.active_tab = None;
                 self.advanced.login = None;
                 self.send(Action::LockVault);

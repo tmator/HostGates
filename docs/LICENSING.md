@@ -27,7 +27,7 @@ Les licences tierces continuent à s'appliquer à leurs composants ; la licence 
 - `option-ext 0.2.0` est sous MPL-2.0 : pour une distribution l'incluant, informer les destinataires de la disponibilité des sources couvertes et fournir un moyen d'obtenir ces sources (y compris les modifications éventuelles) sous MPL. Cela n'impose pas de placer l'ensemble de HostGates sous MPL. Voir [FAQ officielle Mozilla, distribution d'un programme plus large](https://www.mozilla.org/en-US/MPL/2.0/FAQ/) et [texte MPL, sections 3.2 et 3.3](https://www.mozilla.org/en-US/MPL/2.0/).
 - `epaint_default_fonts` inclut des polices OFL-1.1 et Ubuntu-font-1.0 : conserver les notices correspondantes et respecter leurs restrictions de noms et de redistribution.
 - Les composants Apache-2.0, BSD, Unicode-3.0, Boost (BSL-1.0), ISC et autres licences permissives gardent leurs obligations de notices. Pour les doubles licences, choisir une branche autorisée ; un `AND` impose les deux conditions.
-- OpenSSH, mstsc, FreeRDP, TigerVNC et le navigateur sont des programmes externes, non distribués avec HostGates. Leur licence reste indépendante.
+- OpenSSH, mstsc, FreeRDP, TigerVNC, remote-viewer (SPICE) et le navigateur sont des programmes externes, non distribués avec HostGates. Leur licence reste indépendante.
 
 L'inventaire doit être régénéré et les notices revérifiées lors d'un changement de dépendances. Ne pas inclure les bases de sessions personnelles, secrets, exports réels ou répertoires de travail privés dans une publication.
 

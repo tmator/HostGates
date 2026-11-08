@@ -73,3 +73,6 @@ Desktop.ini
 # Public upstream TLS test fixtures; never used by production connections.
 !vendor/ironrdp-mstsgu/tests/certs/server-cert.pem
 !vendor/ironrdp-mstsgu/tests/certs/server-key.pem
+
+# SPICE connection files contain short-lived authentication tickets.
+*.vv

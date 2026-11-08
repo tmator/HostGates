@@ -14,7 +14,7 @@ use std::{
 pub enum Action {
     CreateGateway(String, SessionInput, Secret),
     UnlockVault(Secret),
-    CreateVault(Secret),
+    CreateVault(Secret, Vec<String>),
     ChangeMaster(Secret),
     LockVault,
     PreviewImport(PathBuf),
@@ -27,6 +27,12 @@ pub enum Action {
     Refresh,
     MoveSession(String, Option<String>),
     CreateSessionFolder(FolderInput),
+    SaveSessionResolution(
+        Option<String>,
+        SessionInput,
+        Option<Secret>,
+        Option<(u16, u16)>,
+    ),
     SaveSession(Option<String>, SessionInput),
     SaveSessionSecret(Option<String>, SessionInput, Secret),
     DeleteSession(String),
@@ -47,6 +53,7 @@ pub struct Update {
     pub snapshot: Snapshot,
     pub message: String,
     pub saved_id: Option<String>,
+    pub rdp_resolution: Option<(String, Option<(u16, u16)>)>,
     pub path: PathBuf,
     pub vault_ready: bool,
 }
@@ -120,6 +127,7 @@ impl Worker {
                     let mut rdp_gateways = vec![];
                     let mut rdp_routes = vec![];
                     let mut saved_id = None;
+                    let mut rdp_resolution = None;
                     let mut gateway = None;
                     let mut warning = None;
                     let mut session_folder = None;
@@ -135,14 +143,17 @@ impl Worker {
                                 .unlock(&secret)?;
                             "Coffre déverrouillé."
                         }
-                        Action::CreateVault(secret) => {
-                            let ids = service
+                        Action::CreateVault(secret, extra_ids) => {
+                            let mut ids = service
                                 .db
                                 .snapshot()?
                                 .sessions
                                 .into_iter()
                                 .filter_map(|s| s.credential_id)
                                 .collect::<Vec<_>>();
+                            ids.extend(extra_ids);
+                            ids.sort();
+                            ids.dedup();
                             master::shared()
                                 .ok_or(AppError::VaultUnavailable)?
                                 .0
@@ -206,6 +217,22 @@ impl Worker {
                             session_folder = Some(service.db.save_folder(None, &data)?);
                             "Dossier créé et sélectionné dans la session."
                         }
+
+                        Action::SaveSessionResolution(id, data, secret, resolution) => {
+                            if let Some((width, height)) = resolution {
+                                crate::connections::rdp::DisplaySize::Fixed { width, height }
+                                    .validate()?;
+                            }
+                            let id = service.save(id.as_deref(), &data)?;
+                            if let Some(secret) = secret
+                                && let Err(e) = service.set_secret(&id, secret)
+                            {
+                                warning = Some(e.to_string());
+                            }
+                            rdp_resolution = Some((id.clone(), resolution));
+                            saved_id = Some(id);
+                            "Session enregistrée."
+                        }
                         Action::SaveSession(id, data) => {
                             saved_id = Some(service.save(id.as_deref(), &data)?);
                             "Session enregistrée."
@@ -264,6 +291,7 @@ impl Worker {
                         snapshot: service.db.snapshot()?,
                         message: custom_message.unwrap_or_else(|| message.into()),
                         saved_id,
+                        rdp_resolution,
                         path: path.clone(),
                         vault_ready: master::shared()
                             .is_some_and(|v| v.0.lock().is_ok_and(|v| v.ready())),

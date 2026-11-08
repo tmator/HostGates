@@ -32,8 +32,9 @@ def main():
     metadata = json.loads(run("cargo", "metadata", "--locked", "--format-version", "1"))
     package = next(p for p in metadata["packages"] if p["id"] == metadata["resolve"]["root"])
     version = package["version"]
-    if not re.fullmatch(r"\d+\.\d+\.\d+", version):
-        raise SystemExit("Expected a numeric release version.")
+    if not re.fullmatch(r"\d+\.\d+\.\d+(?:-beta\.\d+)?", version):
+        raise SystemExit("Expected a numeric release or beta version.")
+    package_version = version.replace("-beta.", "~beta.")
     binary = Path(metadata["target_directory"]) / "release" / "hostgates"
     if binary.read_bytes()[:4] != b"\x7fELF":
         raise SystemExit("Expected a Linux ELF executable, not a Windows binary.")
@@ -92,7 +93,7 @@ def main():
     control_dir.mkdir()
     size = sum(p.stat().st_size for p in stage.rglob("*") if p.is_file()) // 1024
     (control_dir / "control").write_text(f"""Package: hostgates
-Version: {version}-1
+Version: {package_version}-1
 Section: net
 Priority: optional
 Architecture: amd64
@@ -106,7 +107,7 @@ Description: Native SSH, RDP, VNC and web connection manager
  Integrated SSH terminal, SFTP, tunnels, encrypted vault and 12 interface languages.
  VNC and optional external RDP require separately installed clients. A graphical desktop is required.
 """)
-    deb = output / f"hostgates_{version}-1_amd64.deb"
+    deb = output / f"hostgates_{package_version}-1_amd64.deb"
     subprocess.run(["dpkg-deb", "--root-owner-group", "-Zxz", "--build", str(stage), str(deb)], check=True)
     # DEBIAN metadata is not part of an RPM payload. Only copy the usr tree below.
     top = work / "rpm"
@@ -117,7 +118,7 @@ Description: Native SSH, RDP, VNC and web connection manager
 %global _build_id_links none
 %global __strip /bin/true
 Name: hostgates
-Version: {version}
+Version: {package_version}
 Release: 1
 Summary: Native SSH, RDP, VNC and web connection manager
 License: MIT

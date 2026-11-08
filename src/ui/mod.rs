@@ -1,5 +1,7 @@
 mod advanced;
 mod chrome;
+mod proxmox;
+mod rdp_display;
 mod shortcuts;
 pub fn locale_dir() -> std::path::PathBuf {
     advanced::data_dir().join("locales")
@@ -22,6 +24,7 @@ use editor::{FolderEditor, SessionEditor};
 use eframe::egui::{self, Color32, RichText};
 
 pub struct HostGates {
+    proxmox: proxmox::State,
     advanced: advanced::Advanced,
     worker: Worker,
     snapshot: Snapshot,
@@ -121,6 +124,7 @@ impl HostGates {
             style.visuals.window_corner_radius = egui::CornerRadius::same(8);
         });
         Self {
+            proxmox: proxmox::State::default(),
             advanced: advanced::Advanced::load(),
             worker: Worker::start(cc.egui_ctx.clone()),
             snapshot: Snapshot {
@@ -231,6 +235,26 @@ impl HostGates {
                     }
                     self.path = update.path.display().to_string();
                     self.vault_ready = update.vault_ready;
+                    if let Some((id, resolution)) = update.rdp_resolution {
+                        let previous = self.advanced.preferences.sessions.get(&id).cloned();
+                        self.advanced
+                            .preferences
+                            .sessions
+                            .entry(id.clone())
+                            .or_default()
+                            .embedded_resolution = resolution;
+                        if let Err(e) = self.advanced.save() {
+                            if let Some(previous) = previous {
+                                self.advanced.preferences.sessions.insert(id, previous);
+                            } else {
+                                self.advanced.preferences.sessions.remove(&id);
+                            }
+                            self.error = Some(format!(
+                                "Session enregistrée, mais résolution non enregistrée : {e}"
+                            ));
+                        }
+                    }
+
                     if let Some(id) = update.saved_id {
                         self.selected = Some(id);
                         self.editor = None;
@@ -354,6 +378,7 @@ impl eframe::App for HostGates {
             self.catalog_open = open;
         }
         self.advanced_dialogs(&ctx);
+        self.proxmox_dialogs(&ctx);
         if let Some(error) = self.error.clone() {
             egui::Window::new(crate::i18n::tr("Opération impossible"))
                 .id(egui::Id::new("error_dialog"))
@@ -368,6 +393,7 @@ impl eframe::App for HostGates {
                 });
         }
         if let Some(mut editor) = self.editor.take() {
+            editor.load_resolution(&self.advanced.preferences);
             let outcome = editor.show(&ctx, &self.snapshot.folders, self.busy, self.vault_ready);
             if !outcome.close {
                 self.editor = Some(editor);

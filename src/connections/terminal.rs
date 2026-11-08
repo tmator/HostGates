@@ -86,6 +86,38 @@ impl Terminal {
             rx,
         )
     }
+    pub(crate) fn from_proxmox(
+        console: super::proxmox_terminal::Console,
+        ctx: eframe::egui::Context,
+    ) -> Self {
+        let (input, recv) = mpsc::sync_channel(64);
+        let (send, output) = mpsc::sync_channel(64);
+        let (resize, sizes) = mpsc::channel();
+        let cancel = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let stopped = cancel.clone();
+        std::thread::spawn(move || console.run(recv, send, sizes, stopped, ctx));
+        Self {
+            parser: vt100::Parser::new_with_callbacks(
+                24,
+                80,
+                10000,
+                TerminalReplies {
+                    input: input.clone(),
+                    startup: false,
+                    answered: Default::default(),
+                },
+            ),
+            status: "Console Proxmox connectée".into(),
+            closed: false,
+            input,
+            output,
+            master: None,
+            native: Some(resize),
+            cancel: Some(cancel),
+            child: None,
+            size: (24, 80),
+        }
+    }
     pub fn from_ssh(session: ssh2::Session, ctx: eframe::egui::Context) -> Result<Self> {
         let mut channel = session
             .channel_session()
@@ -280,7 +312,7 @@ impl Terminal {
                 Err(std::sync::mpsc::TryRecvError::Disconnected) => {
                     if self.native.is_some() {
                         self.closed = true;
-                        self.status = "SSH déconnecté".into();
+                        self.status = "Terminal déconnecté".into();
                     }
                     break;
                 }

@@ -166,8 +166,9 @@ fn cancelled_drag_does_not_move_and_following_double_click_connects() {
     assert_eq!(h.connects, 1);
 }
 
-fn sidebar_app() -> HostGates {
+pub(in crate::ui) fn sidebar_app() -> HostGates {
     HostGates {
+        proxmox: super::super::proxmox::State::default(),
         advanced: super::super::advanced::Advanced::default(),
         worker: crate::services::worker::Worker {
             tx: std::sync::mpsc::channel().0,
@@ -523,6 +524,53 @@ fn imported_gateway_opens_embedded_tab_by_default() {
         app.tabs[0].client,
         crate::ui::tabs::TabClient::EmbeddedRdp(_)
     ));
+}
+
+#[test]
+fn external_rdp_resolution_dialog_precedes_network_and_escape_discards_choice() {
+    use crate::connections::rdp::DisplaySize;
+    let mut app = sidebar_app();
+    app.busy = false;
+    let mut db = crate::database::Database::in_memory().expect("db");
+    let preview =
+        crate::importers::rdp::parse(b"full address:s:desktop.example", "fixture").expect("parse");
+    db.import(&preview).expect("import");
+    app.snapshot = db.snapshot().expect("snapshot");
+    let session = app.snapshot.sessions[0].clone();
+    app.advanced.preferences.default_external_rdp = true;
+    let remembered = DisplaySize::Fixed {
+        width: 1280,
+        height: 720,
+    };
+    let options = app
+        .advanced
+        .preferences
+        .sessions
+        .entry(session.uuid.clone())
+        .or_default();
+    options.rdp_display = remembered;
+    // The picker must precede even an SSH tunnel; no external process/network starts here.
+    options.gateway = Some("missing-tunnel".into());
+    let ctx = egui::Context::default();
+    app.begin_connect(&session, &ctx);
+    assert!(app.error.is_none());
+    assert!(app.tabs.is_empty());
+    assert!(app.advanced.login.is_none());
+    let (_, display) = app.advanced.rdp_launch.as_mut().expect("display dialog");
+    assert_eq!(*display, remembered);
+    *display = DisplaySize::Fullscreen;
+    shortcut_frame(&mut app, &ctx, egui::Key::Enter);
+    assert!(super::super::shortcuts::submitted(&ctx, "rdp_display"));
+    shortcut_frame(&mut app, &ctx, egui::Key::Escape);
+    assert!(app.advanced.rdp_launch.is_none());
+    assert_eq!(
+        app.advanced.preferences.sessions[&session.uuid].rdp_display,
+        remembered
+    );
+    let restored: super::super::advanced::Preferences =
+        serde_json::from_str(&serde_json::to_string(&app.advanced.preferences).expect("serialize"))
+            .expect("reload");
+    assert_eq!(restored.sessions[&session.uuid].rdp_display, remembered);
 }
 
 #[test]

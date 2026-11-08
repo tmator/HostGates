@@ -245,3 +245,48 @@ opaque est masqué en Debug et sa copie dédiée effacée via zeroize ; des copi
 transitoires peuvent subsister dans les tampons du protocole. Il ne remplace pas
 le mot de passe du coffre ni celui de la passerelle. RDSTLS/carte à puce non pris
 en charge ; redirection désactivée pour les tunnels SSH à destination fixe.
+
+
+PROXMOX / SPICE
+Les comptes Proxmox et secrets de jetons API utilisent le coffre existant.
+preferences.json ne contient que les métadonnées et une référence au secret.
+Ces références sont incluses dans la migration du coffre système vers le coffre maître.
+HTTPS vérifie les certificats et les noms d’hôte ; les CA PEM privées peuvent être
+ajoutées explicitement. Aucune redirection HTTP suivie.
+Exception explicite par serveur : « Ne pas vérifier le certificat HTTPS »,
+désactivée par défaut, ignore la chaîne de confiance, les dates et le nom du
+certificat de l’API, ainsi que le fichier CA configuré. Le trafic reste chiffré
+mais un intermédiaire peut intercepter les identifiants et remplacer les tickets
+et le CA SPICE fournis par l’API. Cette option ne change pas directement les
+vérifications TLS de remote-viewer et ne s’applique pas aux autres serveurs.
+Le secret est envoyé dans le formulaire HTTPS ou l’en-tête Authorization, jamais
+dans l’URL ni les arguments d’un processus. Les erreurs API n’affichent pas le corps
+de réponse. Le verrouillage efface les secrets Proxmox en mémoire et annule la
+livraison des travaux en cours ; une requête réseau déjà démarrée peut terminer
+dans son thread avant libération du secret (délai maximal de 20 s par requête).
+Une tentative annulée ne lance aucun client après réception de sa réponse.
+
+SPICE utilise remote-viewer externe : ticket frais et fichier .vv temporaire
+contenant le ticket EN CLAIR, protégé par ACL privée Windows ou mode 0600 Linux.
+Le fichier demande sa suppression par le client et est supprimé à la fermeture
+de l’onglet. Un arrêt brutal peut laisser un résidu dont le ticket expire.
+Seules les propriétés nécessaires sont écrites : type, hôte/proxy, port TLS, CA,
+sujet du certificat, ticket et suppression après lecture. Aucun script, chemin
+arbitraire ni option désactivant TLS provenant de l’API n’est transmis au client.
+La confiance dans le CA SPICE repose sur l’API HTTPS Proxmox authentifiée ;
+elle est compromise si la vérification du certificat API est désactivée.
+La mémoire du client externe et les copies internes HTTP ne peuvent pas être
+garanties effacées par HostGates ; le coffre ne protège pas un poste compromis.
+Les fichiers .vv sont exclus de Git. Ne jamais les publier ou les partager.
+
+Hyper-V / commandes de virtualisation / LXC
+-----------------------------------------
+Les profils Hyper-V réutilisent les références du coffre commun, sans secret dans preferences.json. Le script PowerShell embarqué est fixe : aucune donnée utilisateur n’est interpolée comme code. Les paramètres et le mot de passe sont envoyés au processus enfant par stdin JSON, jamais par arguments, URL ou fichier de script temporaire. Les sorties d’erreur PowerShell ne sont pas réaffichées, pour éviter une fuite de données via des exceptions. La mémoire du processus PowerShell et les copies gérées par Windows ne peuvent pas être garanties effacées ; un administrateur ou un processus doté des droits nécessaires peut inspecter les processus. Le tampon JSON Rust est effacé à sa libération.
+WinRM utilise Negotiate et vérifie les certificats HTTPS via Windows. HostGates ne configure pas TrustedHosts, ne désactive pas la validation TLS WinRM et n’active pas CredSSP. HTTP est une option explicite destinée aux infrastructures WinRM déjà configurées ; HTTPS reste préférable. VMConnect utilise le compte Windows courant, indépendamment du compte de gestion.
+Les actions visent un GUID Hyper-V ou un VMID/type Proxmox après nouvelle lecture de l’inventaire. Elles demandent confirmation. Aucun échec d’arrêt propre ne déclenche de coupure forcée automatique. Une requête distante acceptée peut continuer après un délai dépassé, un verrouillage du coffre ou la fermeture de l’application. Aucun mécanisme d’annulation distante n’est garanti.
+Les anciennes sessions SSH LXC déjà enregistrées conservent leurs propres identifiants et la vérification de clé serveur habituelle. Le nouveau double-clic LXC utilise la console décrite ci-dessous ; aucune session SSH supplémentaire n’est créée.
+
+Console LXC intégrée (termproxy / WebSocket)
+------------------------------------------
+Le double-clic LXC utilise maintenant la console Proxmox, sans SSH ni création de session SSH. Le ticket de console temporaire est demandé avec les droits VM.Console et envoyé à l’hôte HTTPS configuré, via WSS, dans le paramètre vncticket exigé par Proxmox puis dans l’authentification du terminal. Il ne figure jamais dans une ligne de commande ou un fichier de configuration ; les erreurs WebSocket sont filtrées pour ne pas exposer l’URL et son ticket. Les copies internes des bibliothèques réseau ne peuvent pas toutes être effacées de façon garantie. Les journaux d’un reverse proxy doivent masquer les paramètres sensibles des URL.
+La validation TLS et le certificat CA du profil sont appliqués au WebSocket. L’exception explicite de certificat du profil s’applique également à WSS ; elle reste locale à ce profil. Aucun repli vers ws:// ou SSH n’est effectué. Les tailles de trames/messages et files d’attente sont limitées. L’arrêt local reste réactif même si la sortie terminal est pleine. Fermer la console ne garantit pas la déconnexion du shell distant persistant (dtach), conformément au fonctionnement Proxmox.

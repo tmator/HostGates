@@ -108,7 +108,10 @@ impl HostGates {
         egui::ScrollArea::both()
             .auto_shrink([false, false])
             .max_width(ui.available_width())
-            .show(ui, |ui| self.folder_tree(ui, None, 0));
+            .show(ui, |ui| {
+                self.proxmox_tree(ui);
+                self.folder_tree(ui, None, 0);
+            });
         self.tree_open = None;
     }
     fn session_drop_target(
@@ -369,4 +372,4 @@ fn session_row(
 
 #[cfg(test)]
 #[path = "sidebar_tests.rs"]
-mod tests;
+pub(super) mod tests;

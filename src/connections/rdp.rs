@@ -3,6 +3,70 @@ use crate::{
     models::SessionInput,
 };
 use std::process::{Child, Command};
+
+/// External-client display choice. Only known sizes can reach client arguments/files.
+#[derive(Default, Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub enum DisplaySize {
+    #[default]
+    ClientDefault,
+    Fullscreen,
+    Fixed {
+        width: u16,
+        height: u16,
+    },
+}
+impl DisplaySize {
+    pub const STANDARD: &[(u16, u16)] = &[
+        (1024, 768),
+        (1280, 720),
+        (1280, 800),
+        (1280, 1024),
+        (1366, 768),
+        (1440, 900),
+        (1600, 900),
+        (1680, 1050),
+        (1920, 1080),
+        (1920, 1200),
+        (2560, 1440),
+        (2560, 1600),
+        (3440, 1440),
+        (3840, 2160),
+    ];
+    pub fn validate(self) -> Result<()> {
+        if let Self::Fixed { width, height } = self
+            && !Self::STANDARD.contains(&(width, height))
+        {
+            return Err(AppError::Validation("Résolution RDP invalide.".into()));
+        }
+        Ok(())
+    }
+    pub fn file_settings(self) -> Result<String> {
+        self.validate()?;
+        Ok(match self {
+            Self::ClientDefault => String::new(),
+            Self::Fullscreen => "screen mode id:i:2\r\nuse multimon:i:0\r\n".into(),
+            Self::Fixed { width, height } => format!(
+                "screen mode id:i:1\r\nuse multimon:i:0\r\ndesktopwidth:i:{width}\r\ndesktopheight:i:{height}\r\n"
+            ),
+        })
+    }
+    pub fn apply_arguments(self, args: &mut Vec<String>, windows: bool) -> Result<()> {
+        self.validate()?;
+        match self {
+            Self::ClientDefault => {}
+            Self::Fullscreen => args.push("/f".into()),
+            Self::Fixed { width, height } => {
+                if windows {
+                    args.extend([format!("/w:{width}"), format!("/h:{height}")]);
+                } else {
+                    args.retain(|a| a != "/dynamic-resolution");
+                    args.push(format!("/size:{width}x{height}"));
+                }
+            }
+        }
+        Ok(())
+    }
+}
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 #[serde(default)]
 pub struct Gateway {
@@ -139,8 +203,18 @@ impl RdpSession {
         gateway: &Gateway,
         routing: &Routing,
     ) -> Result<Self> {
+        Self::launch_gateway_with_display(s, configured, gateway, routing, DisplaySize::default())
+    }
+    pub fn launch_gateway_with_display(
+        s: &SessionInput,
+        configured: &str,
+        gateway: &Gateway,
+        routing: &Routing,
+        display: DisplaySize,
+    ) -> Result<Self> {
         let program = super::resolve_program(configured, super::ProgramKind::Rdp)?;
-        let text = gateway.file_text_with_routing(s, routing)?;
+        let mut text = gateway.file_text_with_routing(s, routing)?;
+        text.push_str(&display.file_settings()?);
         let bytes = std::iter::once(0xfeffu16)
             .chain(text.encode_utf16())
             .flat_map(u16::to_le_bytes)
@@ -155,19 +229,30 @@ impl RdpSession {
         Ok(client)
     }
     pub fn launch(s: &SessionInput, configured: &str, password: &str) -> Result<Self> {
+        Self::launch_with_display(s, configured, password, DisplaySize::default())
+    }
+    pub fn launch_with_display(
+        s: &SessionInput,
+        configured: &str,
+        password: &str,
+        display: DisplaySize,
+    ) -> Result<Self> {
+        display.validate()?;
         let program = super::resolve_program(configured, super::ProgramKind::Rdp)?;
         s.validate()?;
-        if password.is_empty() {
-            return Self::launch_external(&program, arguments(s, cfg!(windows))?, "RDP");
+        if password.is_empty() && (!cfg!(windows) || display == DisplaySize::ClientDefault) {
+            let mut args = arguments(s, cfg!(windows))?;
+            display.apply_arguments(&mut args, cfg!(windows))?;
+            return Self::launch_external(&program, args, "RDP");
         }
-        if s.username.is_empty() {
+        if !password.is_empty() && s.username.is_empty() {
             return Err(AppError::Validation(
                 "Utilisateur RDP requis pour transmettre le mot de passe enregistré.".into(),
             ));
         }
         #[cfg(windows)]
         {
-            let file = credential_file(s, password)?;
+            let file = connection_file(s, password, display)?;
             let mut client = Self::launch_external(
                 &program,
                 vec![file.path().to_string_lossy().into_owned()],
@@ -187,6 +272,7 @@ impl RdpSession {
                 return Err(AppError::Validation("FreeRDP ne peut pas recevoir ce mot de passe par entrée standard (caractère de contrôle).".into()));
             }
             let mut args = arguments(s, false)?;
+            display.apply_arguments(&mut args, false)?;
             args.push("/from-stdin:force".into());
             let mut child = Command::new(program)
                 .args(args)
@@ -231,7 +317,7 @@ impl RdpSession {
             closed: false,
         })
     }
-    pub(super) fn retain_credential_file(&mut self, file: super::secret_file::ClientFile) {
+    pub(crate) fn retain_credential_file(&mut self, file: super::secret_file::ClientFile) {
         self.credential_file = Some(file);
     }
     pub fn poll(&mut self) {
@@ -260,28 +346,42 @@ impl Drop for RdpSession {
     }
 }
 
-#[cfg(windows)]
+#[cfg(all(windows, test))]
 fn credential_file(s: &SessionInput, password: &str) -> Result<super::secret_file::ClientFile> {
+    connection_file(s, password, DisplaySize::default())
+}
+#[cfg(windows)]
+fn connection_file(
+    s: &SessionInput,
+    password: &str,
+    display: DisplaySize,
+) -> Result<super::secret_file::ClientFile> {
     s.validate()?;
     if password.contains('\0') {
         return Err(AppError::Validation(
             "Mot de passe RDP contenant un caractère NUL non pris en charge.".into(),
         ));
     }
-    let encrypted = super::secret_file::protect_password(password)?;
-    let hex = encrypted
-        .iter()
-        .map(|b| format!("{b:02X}"))
-        .collect::<String>();
+    let authentication = if password.is_empty() {
+        "prompt for credentials:i:1\r\n".to_owned()
+    } else {
+        let encrypted = super::secret_file::protect_password(password)?;
+        let hex = encrypted
+            .iter()
+            .map(|b| format!("{b:02X}"))
+            .collect::<String>();
+        format!("prompt for credentials:i:0\r\npassword 51:b:{hex}\r\n")
+    };
     let host = if s.hostname.contains(':') && !s.hostname.starts_with('[') {
         format!("[{}]", s.hostname)
     } else {
         s.hostname.clone()
     };
-    let text = format!(
-        "full address:s:{host}:{}\r\nusername:s:{}\r\ndomain:s:{}\r\nprompt for credentials:i:0\r\npassword 51:b:{hex}\r\n",
+    let mut text = format!(
+        "full address:s:{host}:{}\r\nusername:s:{}\r\ndomain:s:{}\r\n{authentication}",
         s.port, s.username, s.domain
     );
+    text.push_str(&display.file_settings()?);
     let bytes = std::iter::once(0xfeffu16)
         .chain(text.encode_utf16())
         .flat_map(u16::to_le_bytes)
@@ -307,7 +407,11 @@ mod tests {
             icon: "server".into(),
             tags: vec![],
         };
-        let file = super::credential_file(&data, "never-in-plaintext").expect("rdp file");
+        let display = super::DisplaySize::Fixed {
+            width: 1920,
+            height: 1080,
+        };
+        let file = super::connection_file(&data, "never-in-plaintext", display).expect("rdp file");
         let bytes = std::fs::read(file.path()).expect("read");
         assert_eq!(&bytes[..2], &[0xff, 0xfe]);
         let text = String::from_utf16(
@@ -323,9 +427,80 @@ mod tests {
         assert!(text.contains("prompt for credentials:i:0"));
         assert!(text.contains("password 51:b:01000000"));
         assert!(!text.contains("never-in-plaintext"));
+        assert!(text.contains("screen mode id:i:1\r\nuse multimon:i:0\r\ndesktopwidth:i:1920\r\ndesktopheight:i:1080\r\n"));
+        let manual = super::connection_file(&data, "", display).expect("manual file");
+        let bytes = std::fs::read(manual.path()).expect("read manual");
+        let manual_text = String::from_utf16(
+            &bytes[2..]
+                .as_chunks::<2>()
+                .0
+                .iter()
+                .map(|b| u16::from_le_bytes(*b))
+                .collect::<Vec<_>>(),
+        )
+        .expect("utf16");
+        assert!(manual_text.contains("prompt for credentials:i:1"));
+        assert!(manual_text.contains("desktopwidth:i:1920"));
+        assert!(!manual_text.contains("password 51:"));
         let mut invalid = data;
         invalid.username = "alice\r\nredirectclipboard:i:1".into();
         assert!(super::credential_file(&invalid, "fixture").is_err());
+    }
+}
+#[cfg(test)]
+mod display_tests {
+    use super::*;
+    #[test]
+    fn display_choices_are_validated_and_client_specific() {
+        for &(width, height) in DisplaySize::STANDARD {
+            let display = DisplaySize::Fixed { width, height };
+            let mut windows = vec!["/v:host:3389".into(), "/prompt".into()];
+            display
+                .apply_arguments(&mut windows, true)
+                .expect("windows");
+            assert_eq!(
+                windows[2..],
+                [format!("/w:{width}"), format!("/h:{height}")]
+            );
+            let mut linux = vec!["/v:host:3389".into(), "/dynamic-resolution".into()];
+            display.apply_arguments(&mut linux, false).expect("linux");
+            assert_eq!(
+                linux,
+                ["/v:host:3389".to_owned(), format!("/size:{width}x{height}")]
+            );
+            let file = display.file_settings().expect("file settings");
+            assert!(file.contains("screen mode id:i:1"));
+            assert!(file.contains(&format!(
+                "desktopwidth:i:{width}\r\ndesktopheight:i:{height}"
+            )));
+            assert_eq!(
+                serde_json::from_str::<DisplaySize>(
+                    &serde_json::to_string(&display).expect("serialize")
+                )
+                .expect("reload"),
+                display
+            );
+        }
+        assert!(
+            DisplaySize::ClientDefault
+                .file_settings()
+                .expect("default")
+                .is_empty()
+        );
+        assert!(
+            DisplaySize::Fullscreen
+                .file_settings()
+                .expect("fullscreen")
+                .contains("screen mode id:i:2")
+        );
+        let invalid = DisplaySize::Fixed {
+            width: 0,
+            height: 65535,
+        };
+        let mut args = vec!["/v:host".into()];
+        assert!(invalid.apply_arguments(&mut args, true).is_err());
+        assert_eq!(args, ["/v:host"]);
+        assert!(invalid.file_settings().is_err());
     }
 }
 /// Routing settings imported independently of RD Gateway.

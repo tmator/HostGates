@@ -7,5 +7,8 @@ pub mod error;
 pub mod i18n;
 pub mod importers;
 pub mod models;
+pub mod proxmox;
 pub mod services;
 pub mod ui;
+
+pub mod hyperv;

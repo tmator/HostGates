@@ -1,7 +1,7 @@
 pub mod embedded_rdp;
 pub mod native;
 pub mod rdp;
-mod secret_file;
+pub(crate) mod secret_file;
 pub mod terminal;
 pub mod vnc;
 pub mod web;
@@ -67,6 +67,7 @@ pub fn ssh_arguments_with_legacy(
 
 #[derive(Clone, Copy)]
 pub enum ProgramKind {
+    Spice,
     Ssh,
     Rdp,
     Vnc,
@@ -75,6 +76,7 @@ pub enum ProgramKind {
 impl ProgramKind {
     pub fn defaults(self) -> &'static [&'static str] {
         match self {
+            Self::Spice => &["remote-viewer"],
             Self::Ssh => &["ssh"],
             Self::Vnc => &["vncviewer", "tigervncviewer", "xtigervncviewer"],
             Self::Rdp => {
@@ -95,6 +97,7 @@ impl ProgramKind {
     }
     pub fn label(self) -> &'static str {
         match self {
+            Self::Spice => "SPICE (remote-viewer)",
             Self::Ssh => "OpenSSH",
             Self::Rdp => "Client RDP",
             Self::Vnc => "Client VNC (TigerVNC)",
@@ -143,6 +146,7 @@ pub fn resolve_program(configured: &str, kind: ProgramKind) -> crate::error::Res
 impl crate::models::ExternalPrograms {
     pub fn validate(&self) -> crate::error::Result<()> {
         for (value, kind) in [
+            (&self.spice, ProgramKind::Spice),
             (&self.ssh, ProgramKind::Ssh),
             (&self.rdp, ProgramKind::Rdp),
             (&self.vnc, ProgramKind::Vnc),
@@ -155,3 +159,5 @@ impl crate::models::ExternalPrograms {
         Ok(())
     }
 }
+
+pub(crate) mod proxmox_terminal;

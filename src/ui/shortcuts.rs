@@ -36,6 +36,27 @@ impl HostGates {
                 ("rename_dialog", "rename", self.advanced.rename.is_some()),
                 ("options_dialog", "options", self.advanced.options_open),
                 ("secure_login", "login", self.advanced.login.is_some()),
+                (
+                    "rdp_display_dialog",
+                    "rdp_display",
+                    self.advanced.rdp_launch.is_some(),
+                ),
+                (
+                    "proxmox_editor",
+                    "proxmox_editor",
+                    self.proxmox.editor.is_some(),
+                ),
+                (
+                    "proxmox_login",
+                    "proxmox_login",
+                    self.proxmox.login.is_some(),
+                ),
+                (
+                    "proxmox_delete",
+                    "proxmox_delete",
+                    self.proxmox.delete.is_some(),
+                ),
+                ("vm_power", "vm_power", self.proxmox.power.is_some()),
                 ("broadcast_dialog", "broadcast", self.advanced.broadcast),
                 ("settings_dialog", settings_target, self.settings),
                 ("catalog_dialog", "catalog", self.catalog_open),
@@ -67,8 +88,18 @@ impl HostGates {
             Some("rename")
         } else if self.advanced.options_open {
             Some("options")
+        } else if self.advanced.rdp_launch.is_some() {
+            Some("rdp_display")
         } else if self.advanced.login.is_some() {
             Some("login")
+        } else if self.proxmox.power.is_some() {
+            Some("vm_power")
+        } else if self.proxmox.editor.is_some() {
+            Some("proxmox_editor")
+        } else if self.proxmox.login.is_some() {
+            Some("proxmox_login")
+        } else if self.proxmox.delete.is_some() {
+            Some("proxmox_delete")
         } else if self.advanced.broadcast {
             Some("broadcast")
         } else if self.settings {
@@ -126,6 +157,10 @@ impl HostGates {
                     self.advanced.gateway_draft = None;
                 }
                 "login" => self.advanced.cancel_connection(),
+                "rdp_display" => self.advanced.rdp_launch = None,
+                "vm_power" | "proxmox_editor" | "proxmox_login" | "proxmox_delete" => {
+                    self.proxmox.cancel_dialog(target)
+                }
                 "broadcast" => {
                     self.advanced.broadcast = false;
                     self.advanced.confirm_send = false;

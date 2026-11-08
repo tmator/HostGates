@@ -40,6 +40,10 @@ impl HostGates {
 
     fn workspace_interactive(&self) -> bool {
         self.editor.is_none()
+            && self.proxmox.editor.is_none()
+            && self.proxmox.login.is_none()
+            && self.proxmox.delete.is_none()
+            && self.proxmox.power.is_none()
             && self.folder_editor.is_none()
             && !self.catalog_open
             && !self.settings
@@ -50,6 +54,7 @@ impl HostGates {
             && !self.export_open
             && self.error.is_none()
             && self.advanced.login.is_none()
+            && self.advanced.rdp_launch.is_none()
             && self.advanced.rename.is_none()
             && !self.advanced.broadcast
             && !self.advanced.options_open
@@ -132,6 +137,16 @@ impl HostGates {
             target.data.clone(),
             password,
         );
+        if let Err(e) = rdp.set_resolution(
+            self.advanced
+                .preferences
+                .sessions
+                .get(&original.uuid)
+                .and_then(|o| o.embedded_resolution),
+        ) {
+            self.error = Some(e.to_string());
+            return;
+        }
         rdp.set_routing(
             self.advanced
                 .preferences
@@ -159,6 +174,13 @@ impl HostGates {
         });
     }
     pub(super) fn connect_external(&mut self, s: &Session, ctx: &egui::Context) {
+        let display = self
+            .advanced
+            .preferences
+            .sessions
+            .get(&s.uuid)
+            .map(|o| o.rdp_display)
+            .unwrap_or_default();
         if s.data.protocol == Protocol::RDP && !self.uses_external_rdp(&s.uuid) {
             self.connect_embedded_rdp(s, s);
             return;
@@ -179,11 +201,12 @@ impl HostGates {
                 .map(|o| o.rdp_routing.clone())
                 .unwrap_or_default();
             #[cfg(windows)]
-            let client = RdpSession::launch_gateway_with_routing(
+            let client = RdpSession::launch_gateway_with_display(
                 &s.data,
                 &self.snapshot.programs.rdp,
                 &gateway,
                 &routing,
+                display,
             )
             .map(TabClient::Rdp);
             #[cfg(not(windows))]
@@ -194,7 +217,10 @@ impl HostGates {
             .and_then(|program| {
                 gateway
                     .arguments_with_routing(&s.data, &routing)
-                    .and_then(|args| Terminal::launch(&program, &args, ctx.clone()))
+                    .and_then(|mut args| {
+                        display.apply_arguments(&mut args, false)?;
+                        Terminal::launch(&program, &args, ctx.clone())
+                    })
             })
             .map(|t| TabClient::Terminal(Box::new(t), TerminalView::default()));
             match client {
@@ -270,14 +296,24 @@ impl HostGates {
             Protocol::RDP => {
                 #[cfg(windows)]
                 {
-                    RdpSession::launch(&s.data, &self.snapshot.programs.rdp, &password)
-                        .map(TabClient::Rdp)
+                    RdpSession::launch_with_display(
+                        &s.data,
+                        &self.snapshot.programs.rdp,
+                        &password,
+                        display,
+                    )
+                    .map(TabClient::Rdp)
                 }
                 #[cfg(not(windows))]
                 {
                     if !password.is_empty() {
-                        RdpSession::launch(&s.data, &self.snapshot.programs.rdp, &password)
-                            .map(TabClient::Rdp)
+                        RdpSession::launch_with_display(
+                            &s.data,
+                            &self.snapshot.programs.rdp,
+                            &password,
+                            display,
+                        )
+                        .map(TabClient::Rdp)
                     } else {
                         let program = match crate::connections::resolve_program(
                             &self.snapshot.programs.rdp,
@@ -290,7 +326,10 @@ impl HostGates {
                             }
                         };
                         crate::connections::rdp::arguments(&s.data, false)
-                            .and_then(|args| Terminal::launch(&program, &args, ctx.clone()))
+                            .and_then(|mut args| {
+                                display.apply_arguments(&mut args, false)?;
+                                Terminal::launch(&program, &args, ctx.clone())
+                            })
                             .map(|t| TabClient::Terminal(Box::new(t), TerminalView::default()))
                     }
                 }
@@ -544,7 +583,7 @@ impl HostGates {
                 }
                 match &mut tab.client {
                     TabClient::Terminal(t,v)=>{if count>1{v.focus=false;}v.show(ui,t,interactive);},
-                    TabClient::Rdp(r)=>{ui.heading(tr("Bureau distant RDP / VNC"));ui.label(crate::i18n::tr(&r.status));ui.label(tr("Le client distant utilise sa propre fenêtre. Utilisez Alt+Tab pour la retrouver."));},
+                    TabClient::Rdp(r)=>{ui.heading(tr("Bureau distant RDP / VNC / SPICE"));ui.label(crate::i18n::tr(&r.status));ui.label(tr("Le client distant utilise sa propre fenêtre. Utilisez Alt+Tab pour la retrouver."));},
                     TabClient::EmbeddedRdp(r)=>r.show(ui,interactive),
                     TabClient::Web=>{ui.heading(tr("Tunnel Web actif"));ui.label(tr("Gardez cet onglet ouvert pendant la navigation. Le fermer arrête le tunnel."));}
                 }

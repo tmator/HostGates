@@ -67,7 +67,7 @@ impl HostGates {
                 ui.heading(crate::i18n::tr("Applications externes"));
                 ui.label(crate::i18n::tr("Champ vide : recherche automatique dans PATH. Sinon, chemin absolu de l’exécutable, sans guillemets ni arguments."));
                 ui.add_enabled_ui(!self.busy, |ui| {
-                    for (label, value) in [("SSH (OpenSSH)", &mut programs.ssh), (if cfg!(windows) { "RDP (mstsc)" } else { "RDP (FreeRDP)" }, &mut programs.rdp), ("VNC (TigerVNC ou compatible hôte::port)", &mut programs.vnc), ("Terminal local", &mut programs.terminal)] {
+                    for (label, value) in [("SPICE (remote-viewer)", &mut programs.spice), ("SSH (OpenSSH)", &mut programs.ssh), (if cfg!(windows) { "RDP (mstsc)" } else { "RDP (FreeRDP)" }, &mut programs.rdp), ("VNC (TigerVNC ou compatible hôte::port)", &mut programs.vnc), ("Terminal local", &mut programs.terminal)] {
                         ui.label(crate::i18n::tr(label));
                         ui.horizontal(|ui| {
                             if ui.add(egui::TextEdit::singleline(value).desired_width(460.0).hint_text(crate::i18n::tr("Automatique (PATH)"))).changed() { self.programs_check = None; }
@@ -85,7 +85,7 @@ impl HostGates {
                     ui.horizontal_wrapped(|ui| {
                         if ui.button(crate::i18n::tr("Vérifier les chemins")).clicked() {
                             use crate::connections::{resolve_program, ProgramKind};
-                            self.programs_check = Some([(&programs.ssh, ProgramKind::Ssh), (&programs.rdp, ProgramKind::Rdp), (&programs.vnc, ProgramKind::Vnc), (&programs.terminal, ProgramKind::Terminal)].into_iter().map(|(value,kind)| match resolve_program(value,kind) {
+                            self.programs_check = Some([(&programs.spice, ProgramKind::Spice), (&programs.ssh, ProgramKind::Ssh), (&programs.rdp, ProgramKind::Rdp), (&programs.vnc, ProgramKind::Vnc), (&programs.terminal, ProgramKind::Terminal)].into_iter().map(|(value,kind)| match resolve_program(value,kind) {
                                 Ok(path) => format!("{} : {}", kind.label(), path.display()), Err(e) => e.to_string(),
                             }).collect::<Vec<_>>().join("\n"));
                         }

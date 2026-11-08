@@ -1,6 +1,6 @@
 # Inventaire des licences déclarées
 
-Généré le 1er novembre 2026 depuis Cargo.lock (HostGates 0.4.0), toutes cibles. IronRDP client, connector, pdu et MSTSGU sont adaptés localement : voir les fichiers HOSTGATES_PATCH.md dans vendor/ et les licences associées. Cet inventaire ne remplace pas les notices.
+Généré le 4 novembre 2026 depuis Cargo.lock (HostGates 0.4.0 + modifications Proxmox/SPICE non publiées), toutes cibles. IronRDP client, connector, pdu et MSTSGU sont adaptés localement : voir les fichiers HOSTGATES_PATCH.md dans vendor/ et les licences associées. Cet inventaire ne remplace pas les notices.
 
 | Composant | Version | Licence déclarée |
 |---|---|---|
@@ -283,6 +283,7 @@ Généré le 1er novembre 2026 depuis Cargo.lock (HostGates 0.4.0), toutes cible
 | litrs | 1.0.1 | MIT OR Apache-2.0 |
 | lock_api | 0.4.14 | MIT OR Apache-2.0 |
 | log | 0.4.34 | MIT OR Apache-2.0 |
+| lru-slab | 0.1.3 | MIT OR Apache-2.0 OR Zlib |
 | md-5 | 0.10.6 | MIT OR Apache-2.0 |
 | md-5 | 0.11.0 | MIT OR Apache-2.0 |
 | md4 | 0.10.2 | MIT OR Apache-2.0 |
@@ -339,6 +340,7 @@ Généré le 1er novembre 2026 depuis Cargo.lock (HostGates 0.4.0), toutes cible
 | objc2-uniform-type-identifiers | 0.2.2 | MIT |
 | objc2-user-notifications | 0.2.2 | MIT |
 | oid | 0.2.1 | MIT OR Apache-2.0 |
+| oid-registry | 0.8.1 | MIT OR Apache-2.0 |
 | once_cell | 1.21.4 | MIT OR Apache-2.0 |
 | opaque-debug | 0.3.1 | MIT OR Apache-2.0 |
 | openssl-probe | 0.2.2 | MIT OR Apache-2.0 |
@@ -353,6 +355,7 @@ Généré le 1er novembre 2026 depuis Cargo.lock (HostGates 0.4.0), toutes cible
 | parking_lot_core | 0.9.12 | MIT OR Apache-2.0 |
 | password-hash | 0.5.0 | MIT OR Apache-2.0 |
 | pbkdf2 | 0.13.0 | MIT OR Apache-2.0 |
+| pem | 4.0.0 | MIT |
 | pem-rfc7468 | 1.0.0 | Apache-2.0 OR MIT |
 | peniko | 0.6.1 | Apache-2.0 OR MIT |
 | percent-encoding | 2.3.2 | MIT OR Apache-2.0 |
@@ -391,6 +394,9 @@ Généré le 1er novembre 2026 depuis Cargo.lock (HostGates 0.4.0), toutes cible
 | pxfm | 0.1.30 | BSD-3-Clause OR Apache-2.0 |
 | quick-error | 2.0.1 | MIT/Apache-2.0 |
 | quick-xml | 0.41.0 | MIT |
+| quinn | 0.11.12 | MIT OR Apache-2.0 |
+| quinn-proto | 0.11.19 | MIT OR Apache-2.0 |
+| quinn-udp | 0.5.16 | MIT OR Apache-2.0 |
 | quote | 1.0.47 | MIT OR Apache-2.0 |
 | r-efi | 5.3.0 | MIT OR Apache-2.0 OR LGPL-2.1-or-later |
 | r-efi | 6.0.0 | MIT OR Apache-2.0 OR LGPL-2.1-or-later |
@@ -403,8 +409,10 @@ Généré le 1er novembre 2026 depuis Cargo.lock (HostGates 0.4.0), toutes cible
 | rand_core | 0.10.1 | MIT OR Apache-2.0 |
 | rand_core | 0.6.4 | MIT OR Apache-2.0 |
 | rand_core | 0.9.5 | MIT OR Apache-2.0 |
+| rand_pcg | 0.10.2 | MIT OR Apache-2.0 |
 | raw-window-handle | 0.6.2 | MIT OR Apache-2.0 OR Zlib |
 | rc2 | 0.9.0 | MIT OR Apache-2.0 |
+| rcgen | 0.14.10 | MIT OR Apache-2.0 |
 | read-fonts | 0.41.0 | MIT OR Apache-2.0 |
 | redox_syscall | 0.4.1 | MIT |
 | redox_syscall | 0.5.18 | MIT |
@@ -504,6 +512,7 @@ Généré le 1er novembre 2026 depuis Cargo.lock (HostGates 0.4.0), toutes cible
 | time-core | 0.1.9 | MIT OR Apache-2.0 |
 | time-macros | 0.2.32 | MIT OR Apache-2.0 |
 | tinystr | 0.8.4 | Unicode-3.0 |
+| tinyvec | 1.13.3 | Zlib OR Apache-2.0 OR MIT |
 | tls_codec | 0.4.2 | Apache-2.0 OR MIT |
 | tls_codec_derive | 0.4.2 | Apache-2.0 OR MIT |
 | tokio | 1.53.3 | MIT |
@@ -615,10 +624,12 @@ Généré le 1er novembre 2026 depuis Cargo.lock (HostGates 0.4.0), toutes cible
 | x25519-dalek | 3.0.0-rc.1 | BSD-3-Clause |
 | x509-cert | 0.2.5 | Apache-2.0 OR MIT |
 | x509-cert | 0.3.0 | Apache-2.0 OR MIT |
+| x509-parser | 0.18.1 | MIT OR Apache-2.0 |
 | xcursor | 0.3.11 | MIT |
 | xkbcommon-dl | 0.4.2 | MIT |
 | xkeysym | 0.2.1 | MIT OR Apache-2.0 OR Zlib |
 | xml-rs | 0.8.29 | MIT |
+| yasna | 0.6.0 | MIT OR Apache-2.0 |
 | yoke | 0.8.3 | Unicode-3.0 |
 | yoke-derive | 0.8.4 | Unicode-3.0 |
 | yuv | 0.8.19 | BSD-3-Clause OR Apache-2.0 |

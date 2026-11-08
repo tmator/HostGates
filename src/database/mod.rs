@@ -295,6 +295,7 @@ impl Database {
                 .unwrap_or_default())
         };
         Ok(ExternalPrograms {
+            spice: read("program_spice")?,
             ssh: read("program_ssh")?,
             rdp: read("program_rdp")?,
             vnc: read("program_vnc")?,
@@ -305,6 +306,7 @@ impl Database {
         programs.validate()?;
         let tx = self.conn.savepoint()?;
         for (key, value) in [
+            ("program_spice", &programs.spice),
             ("program_ssh", &programs.ssh),
             ("program_rdp", &programs.rdp),
             ("program_vnc", &programs.vnc),

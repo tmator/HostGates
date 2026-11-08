@@ -145,6 +145,8 @@ pub struct Snapshot {
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct ExternalPrograms {
+    #[serde(default)]
+    pub spice: String,
     pub ssh: String,
     pub rdp: String,
     pub vnc: String,

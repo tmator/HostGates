@@ -135,3 +135,25 @@ Les entrées RDP intégrées sont envoyées dès leur traitement, sans attendre
 l’affichage suivant. TCP_NODELAY est activé sur les connexions TCP directes et
 vers les passerelles/proxys afin de limiter les délais des petits paquets.
 La surbrillance d’un élément nécessite toujours un aller-retour vers le serveur.
+
+## Résolution du client externe
+
+Avant chaque lancement de MSTSC (Windows) ou FreeRDP (Linux), la fenêtre
+**Affichage RDP** propose une liste de résolutions standard, de 1024 × 768 à
+3840 × 2160, ainsi que **Plein écran** et **Réglage du client**. Ce dernier
+conserve le comportement habituel du client externe.
+
+Le choix est mémorisé pour cette session lorsque vous cliquez sur **Connexion**
+ou appuyez sur Entrée. Annuler, Échap ou fermer la fenêtre ne modifie pas le
+dernier choix et ne lance aucune connexion. Le choix intervient avant
+l’ouverture éventuelle du tunnel SSH ; il est aussi appliqué aux sessions
+importées utilisant RD Gateway et le routage RDS.
+
+MSTSC reçoit les dimensions et le mode fenêtré/plein écran dans un fichier RDP
+temporaire protégé. Les mots de passe enregistrés restent protégés par DPAPI.
+FreeRDP reçoit `/size:largeurxhauteur` ou `/f`. Le serveur peut imposer ses
+propres limites. Ce réglage ne modifie pas la résolution du client IronRDP intégré.
+
+## Résolution du bureau
+
+Dans **Nouvelle session** ou **Modifier la session**, sélectionnez **Résolution IronRDP**. Le choix est conservé par session dans preferences.json et prend effet à la prochaine connexion. Les résolutions standard vont de 1024×768 à 3840×2160 ; sans configuration, le bureau demandé reste 1280×720. Le réglage s’applique en direct, via tunnel SSH et via RD Gateway/RDS. Le serveur peut négocier une autre taille. Le plein écran agrandit la zone d’affichage ; il ne modifie pas le choix enregistré de résolution.
