@@ -1,5 +1,11 @@
 # Journal des versions
 
+## 0.9.0-beta.3 — 9 novembre 2026 (bêta)
+
+- Hyper-V Linux : transport WinRM intégré en Rust, sans Python/pypsrp ; inventaire des clusters et commandes existantes conservés. FreeRDP reste nécessaire aux consoles.
+- SPICE Proxmox : suppression du port non TLS invalide `-1`, canaux TLS obligatoires et diagnostic de joignabilité du proxy avant lancement.
+- Aide et traductions actualisées ; compilation avec Rust 1.98 minimum.
+
 ## 0.9.0-beta.2 — 8 novembre 2026 (bêta)
 
 - Gestion des hôtes et clusters Hyper-V depuis Linux via WinRM HTTPS et Python/pypsrp : inventaire, états et actions d’alimentation.

@@ -25,7 +25,7 @@ HostGates utilise Rust et une interface native egui/eframe. Node.js, Tauri et We
 
 ## 3. Installer Rust
 
-Le projet demande Rust 1.95 minimum. Installez la version stable avec rustup :
+Le projet demande Rust 1.98 minimum. Installez la version stable avec rustup :
 
 ```bash
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh

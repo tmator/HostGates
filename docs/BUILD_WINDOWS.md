@@ -1,6 +1,6 @@
 # Compiler sous Windows
 
-Windows 10/11 x64, Rust stable >=1.95 avec cible MSVC, Visual Studio Build Tools 2022 avec outils C++ et SDK Windows. Aucun Node.js ou WebView2.
+Windows 10/11 x64, Rust stable >=1.98 avec cible MSVC, Visual Studio Build Tools 2022 avec outils C++ et SDK Windows. Aucun Node.js ou WebView2.
 
 ```powershell
 ./scripts/check-windows.ps1

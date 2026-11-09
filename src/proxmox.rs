@@ -24,7 +24,6 @@ pub struct Server {
     pub hyperv: bool,
     pub cluster: bool,
     pub vmconnect: PathBuf,
-    pub hyperv_python: PathBuf,
     pub hyperv_freerdp: PathBuf,
     pub id: String,
     pub name: String,
@@ -44,7 +43,6 @@ impl Default for Server {
             hyperv: false,
             cluster: false,
             vmconnect: PathBuf::new(),
-            hyperv_python: PathBuf::new(),
             hyperv_freerdp: PathBuf::new(),
             id: uuid::Uuid::new_v4().to_string(),
             name: String::new(),
@@ -674,6 +672,32 @@ fn valid_ca_pem(pem: &[u8]) -> bool {
     !roots.is_empty()
 }
 impl SpiceConfig {
+    /// Run on the connection worker, never on the UI thread. No tickets are sent.
+    pub fn check_proxy(&self) -> Result<()> {
+        use std::net::{TcpStream, ToSocketAddrs};
+        self.file_text()?;
+        let proxy = url::Url::parse(&self.proxy).map_err(|_| failure("SPICE : proxy invalide."))?;
+        let host = proxy
+            .host_str()
+            .unwrap_or_default()
+            .trim_matches(['[', ']']);
+        let port = proxy.port_or_known_default().unwrap_or(3128);
+        let addresses = (host, port).to_socket_addrs().map_err(|_| failure(
+            "SPICE : nom du proxy introuvable. Configurez son adresse accessible dans le profil Proxmox."))?;
+        let deadline = std::time::Instant::now() + Duration::from_secs(4);
+        for address in addresses.take(4) {
+            let remaining = deadline.saturating_duration_since(std::time::Instant::now());
+            if remaining.is_zero() {
+                break;
+            }
+            if TcpStream::connect_timeout(&address, remaining.min(Duration::from_secs(1))).is_ok() {
+                return Ok(());
+            }
+        }
+        Err(failure(&format!(
+            "SPICE : proxy {host}:{port} inaccessible. Vérifiez le port SPICE (habituellement 3128), le VPN et le champ Hôte du proxy SPICE. L’accès HTTPS à Proxmox ne suffit pas."
+        )))
+    }
     pub fn file_text(&self) -> Result<Secret> {
         if self.kind != "spice" {
             return Err(failure("SPICE : type de console invalide."));
@@ -700,7 +724,7 @@ impl SpiceConfig {
         // Only allowlisted fields reach remote-viewer. Never pass server-provided commands,
         // arbitrary file paths, redirection options or TLS-verification overrides.
         Ok(Zeroizing::new(format!(
-            "[virt-viewer]\ntype=spice\nhost={}\nproxy={}\nport=-1\ntls-port={}\nhost-subject={}\nca={}\npassword={}\ndelete-this-file=1\n",
+            "[virt-viewer]\ntype=spice\nhost={}\nproxy={}\nsecure-channels=all\ntls-port={}\nhost-subject={}\nca={}\npassword={}\ndelete-this-file=1\n",
             escape(&self.host),
             escape(&self.proxy),
             self.tls_port,

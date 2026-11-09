@@ -5,6 +5,7 @@ Versions exactes reproductibles dans `Cargo.lock`. Vérification initiale des AP
 | Dépendance | Rôle | Licence annoncée | Source |
 |---|---|---|---|
 | eframe/egui 0.36 | interface native Windows/Linux | MIT OR Apache-2.0 | https://github.com/emilk/egui |
+| winrm-rs 2.0.0 | transport Hyper-V Linux natif : WinRM HTTPS/NTLM et commandes PowerShell distantes | MIT OR Apache-2.0 | https://github.com/muchiny/winrm-rs |
 | rusqlite 0.38 | SQLite, bibliothèque embarquée | MIT | https://github.com/rusqlite/rusqlite |
 | keyring-core 1 | abstraction coffre | MIT OR Apache-2.0 | https://docs.rs/keyring-core/ |
 | windows-native-keyring-store 1 | Windows Credential Manager | MIT OR Apache-2.0 | https://docs.rs/windows-native-keyring-store/ |
@@ -17,7 +18,7 @@ Versions exactes reproductibles dans `Cargo.lock`. Vérification initiale des AP
 
 Le nouvel écosystème keyring recommande `keyring-core` et les fournisseurs spécifiques pour les applications qui contrôlent leur backend. Pas de dépendance au wrapper générique keyring 4 ni à son mode CLI. Les fournisseurs sont conditionnels à la cible. Le fournisseur Linux utilise `crypto-rust` pour la communication Secret Service ; ce n'est pas une implémentation cryptographique maison.
 
-eframe 0.36 a renommé les panels en `Panel` et le callback applicatif en `App::ui` ; le code suit ces API et exige Rust 1.95. La chaîne locale est Rust 1.99.
+eframe 0.36 a renommé les panels en `Panel` et le callback applicatif en `App::ui` ; le code suit ces API et exige Rust 1.98. La chaîne locale est Rust 1.99.
 
 Les contrats de futurs backends ne valent pas validation de dépendances supplémentaires. Les composants transitifs ont leurs propres licences ; voir l'[inventaire](THIRD_PARTY_LICENSES.md) et les [conditions de redistribution](LICENSING.md). Les notices complètes restent à réunir pour chaque paquet binaire distribué.
 

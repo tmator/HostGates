@@ -705,11 +705,13 @@ impl HostGates {
                     Operation::Refresh => Ok(Completed::Vms(api.vms()?)),
                     Operation::Console(vmid) => {
                         let config = api.console(&server, vmid)?;
+                        let received = Instant::now();
+                        config.check_proxy()?;
                         Ok(Completed::Console(
                             config,
                             format!("{} · VM {vmid}", server.name),
                             program.ok_or(AppError::NotFound)?,
-                            Instant::now(),
+                            received,
                         ))
                     }
                 }
@@ -985,8 +987,7 @@ impl HostGates {
                         }
                         #[cfg(not(windows))]
                         {
-                        ui.small(crate::i18n::tr("Linux : WinRM HTTPS, Python avec pypsrp et FreeRDP sont requis. Consultez l’aide Hyper-V."));
-                        program_picker(ui, "Python (pypsrp)", &mut draft.server.hyperv_python);
+                        ui.small(crate::i18n::tr("Linux : WinRM HTTPS natif et FreeRDP. Aucun Python requis. Consultez l’aide Hyper-V."));
                         program_picker(ui, "FreeRDP (Hyper-V)", &mut draft.server.hyperv_freerdp);
                         program_picker(ui, &crate::i18n::tr("Certificat CA PEM (facultatif)"), &mut draft.server.ca_file);
                         }

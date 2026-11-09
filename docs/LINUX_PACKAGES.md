@@ -37,7 +37,7 @@ Les dialogues de fichiers nécessitent `xdg-desktop-portal` et un backend adapt�
 
 ## Construire les paquets
 
-Compiler avec Rust 1.95 minimum sur une base glibc 2.34 ou antérieure, par exemple Rocky Linux 9. Les images officielles sont disponibles sur [Quay, espace Rocky Linux](https://quay.io/repository/rockylinux/rockylinux) ; cette base peut fonctionner dans un conteneur Podman à l'intérieur de WSL2.
+Compiler avec Rust 1.98 minimum sur une base glibc 2.34 ou antérieure, par exemple Rocky Linux 9. Les images officielles sont disponibles sur [Quay, espace Rocky Linux](https://quay.io/repository/rockylinux/rockylinux) ; cette base peut fonctionner dans un conteneur Podman à l'intérieur de WSL2.
 
 ```bash
 cargo build --release --locked

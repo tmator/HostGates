@@ -32,7 +32,7 @@ L’onglet HostGates suit le processus externe et permet son arrêt. Fermer cet 
 
 ## Sécurité et dépannage
 
-Les requêtes API utilisent HTTPS et refusent les redirections HTTP. La validation du certificat est activée par défaut ; l’exception explicite décrite ci-dessus ne concerne que le serveur configuré. Les mots de passe/jetons ne sont ni dans les URL ni dans les arguments des processus. La case ne désactive pas directement la vérification de remote-viewer. Toutefois, lorsque l’API n’est pas authentifiée, un intermédiaire pourrait remplacer la configuration SPICE qu’elle fournit. La configuration SPICE conserve le CA et le sujet du certificat fournis par Proxmox, impose le port TLS et n’accepte qu’une liste restreinte de propriétés.
+Les requêtes API utilisent HTTPS et refusent les redirections HTTP. La validation du certificat est activée par défaut ; l’exception explicite décrite ci-dessus ne concerne que le serveur configuré. Les mots de passe/jetons ne sont ni dans les URL ni dans les arguments des processus. La case ne désactive pas directement la vérification de remote-viewer. Toutefois, lorsque l’API n’est pas authentifiée, un intermédiaire pourrait remplacer la configuration SPICE qu’elle fournit. La configuration SPICE conserve le CA et le sujet du certificat fournis par Proxmox, omet le port non chiffré (y compris la valeur invalide `port=-1`), impose `secure-channels=all` et le port TLS et n’accepte qu’une liste restreinte de propriétés.
 
 Un fichier temporaire `.vv` contient le ticket en clair avec des droits limités au compte utilisateur (0600 sous Linux, ACL privée sous Windows). `remote-viewer` est invité à le supprimer après lecture ; HostGates le retire aussi lorsque l’onglet est fermé. Une fermeture brutale peut laisser un fichier résiduel, dont le ticket expire. Voir `securite.txt`. Ne pas partager de fichiers `.vv` ; ils sont exclus de Git.
 
@@ -43,11 +43,12 @@ Un fichier temporaire `.vv` contient le ticket en clair avec des droits limités
 - **HTTP 401 — Jeton API refusé** : vérifier le realm, le nom du jeton, son secret et son expiration ; ne pas mettre le préfixe `PVEAPIToken=` dans l’identifiant. Vérifier la transmission de l’en-tête Authorization par un éventuel reverse proxy.
 - **Droits insuffisants / liste vide** : vérifier les ACL du compte et du jeton.
 - **Affichage SPICE absent** : modifier l’affichage côté Proxmox, puis actualiser/démarrer la VM.
+- **Proxy SPICE inaccessible** : HostGates teste son port TCP avant le lancement, sans envoyer de ticket. Le port 3128 doit être accessible depuis le poste ; un accès au seul port HTTPS 8006 ou au reverse proxy Web ne suffit pas. Ce contrôle ne valide pas le protocole SPICE.
 - **Le client s’ouvre sans connexion** : vérifier le proxy SPICE et le port 3128. Relancer pour obtenir un ticket neuf. Les erreurs propres au client apparaissent dans sa fenêtre.
 
 ## Validation et périmètre
 
-Tests automatisés avec une API HTTPS simulée : mot de passe, cookie/CSRF, jeton API, renouvellement de tickets, résolution du nœud courant, erreurs HTTP et refus des redirections, validation des propriétés `.vv`. Aucun serveur Proxmox réel ni console graphique distante n’était disponible pour la validation : le parcours complet reste à tester sur votre infrastructure.
+Tests automatisés avec une API HTTPS simulée : mot de passe, cookie/CSRF, jeton API, renouvellement de tickets, résolution du nœud courant, erreurs HTTP et refus des redirections, validation des propriétés `.vv`. Le fichier a aussi été vérifié avec remote-viewer contre un proxy et un serveur TLS locaux : réception de la requête CONNECT et du début du protocole SPICE. L’ancien fichier passe également cet essai avec cette version du client : la suppression de `port=-1` ne prouve pas la cause d’un échec de connexion réel. Aucun serveur Proxmox réel ni console graphique distante n’était disponible pour la validation : le parcours complet reste à tester sur votre infrastructure.
 
 SPICE est également utilisé avec QEMU/KVM et des plateformes fondées sur libvirt. Cette intégration d’inventaire et d’authentification cible spécifiquement l’API Proxmox ; elle n’ajoute pas encore de connexion générique libvirt/oVirt.
 

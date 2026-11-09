@@ -4,7 +4,7 @@
 
 La demande initiale proposait Tauri/React. La préférence explicite suivante pour une application Rust conduit à une interface **egui/eframe native**. Le code applicatif, l'interface, la validation et la persistance sont en Rust. SQLite et certaines dépendances système comportent du code natif non Rust. Le projet ne dépend plus de Tauri, React, TypeScript ou xterm.js.
 
-egui/eframe supporte Windows et Linux (X11/Wayland). Le renderer OpenGL `glow` évite un backend WebView ; un pilote graphique compatible reste nécessaire. La version 0.36 requiert Rust 1.95 minimum. Le terminal utilise portable-pty et le parseur existant vt100 avec un rendu egui. OpenSSH assure le protocole SSH.
+egui/eframe supporte Windows et Linux (X11/Wayland). Le renderer OpenGL `glow` évite un backend WebView ; un pilote graphique compatible reste nécessaire. Le projet requiert Rust 1.98 minimum, notamment pour le transport WinRM natif. Le terminal utilise portable-pty et le parseur existant vt100 avec un rendu egui. OpenSSH assure le protocole SSH.
 
 ## Organisation actuelle
 

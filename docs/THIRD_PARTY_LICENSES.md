@@ -646,3 +646,15 @@ Généré le 4 novembre 2026 depuis Cargo.lock (HostGates 0.4.0 + modifications 
 | zmij | 1.0.23 | MIT |
 | zune-core | 0.5.3 | MIT OR Apache-2.0 OR Zlib |
 | zune-jpeg | 0.5.15 | MIT OR Apache-2.0 OR Zlib |
+
+## Ajouts du transport WinRM natif — 9 novembre 2026
+
+| Composant | Version | Licence déclarée |
+|---|---|---|
+| md4 | 0.11.0 | MIT OR Apache-2.0 |
+| reqwest | 0.13.5 | MIT OR Apache-2.0 |
+| rustls-platform-verifier | 0.7.1 | MIT OR Apache-2.0 |
+| rustls-platform-verifier-android | 0.2.0 | MIT OR Apache-2.0 |
+| webpki-root-certs | 1.0.11 | CDLA-Permissive-2.0 |
+| webpki-roots | 1.0.11 | CDLA-Permissive-2.0 |
+| winrm-rs | 2.0.0 | MIT OR Apache-2.0 |

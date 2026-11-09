@@ -1,4 +1,7 @@
-//! Windows remoting adapter. Script is fixed; credentials travel only through stdin.
+//! Hyper-V adapters: native WinRM on Linux, Windows PowerShell on Windows.
+#[cfg(any(not(windows), test))]
+#[path = "hyperv_native.rs"]
+mod native;
 use crate::{
     error::{AppError, Result},
     proxmox::{Server, Vm},
@@ -45,11 +48,7 @@ pub fn validate(server: &Server) -> Result<url::Url> {
                 "Hyper-V Linux : HTTPS WinRM est requis (port 5986).",
             ));
         }
-        for path in [
-            &server.hyperv_python,
-            &server.hyperv_freerdp,
-            &server.ca_file,
-        ] {
+        for path in [&server.hyperv_freerdp, &server.ca_file] {
             if !path.as_os_str().is_empty() && (!path.is_absolute() || !path.is_file()) {
                 return Err(failure(
                     "Hyper-V Linux : sélectionnez un chemin absolu existant.",
@@ -71,6 +70,11 @@ pub fn run(server: &Server, secret: &str, action: &str, id: &str) -> Result<Vec<
     {
         return Err(failure("Hyper-V : paramètres invalides."));
     }
+    #[cfg(not(windows))]
+    {
+        native::run(server, secret, action, id)
+    }
+    #[cfg(windows)]
     {
         use std::{
             io::{Read, Write},
@@ -117,16 +121,9 @@ pub fn run(server: &Server, secret: &str, action: &str, id: &str) -> Result<Vec<
             command.creation_flags(0x08000000);
             command
         };
-        #[cfg(not(windows))]
-        let mut command = {
-            let python = linux_program(&server.hyperv_python, &["python3"])?;
-            let mut command = Command::new(python);
-            command.args(["-I", "-c", include_str!("hyperv_linux.py")]);
-            command
-        };
         let mut child = command.stdin(Stdio::piped()).stdout(Stdio::piped())
             .stderr(Stdio::null()).spawn()
-            .map_err(|_| failure("Hyper-V : impossible de lancer PowerShell / Python. Vérifiez le chemin configuré et les dépendances."))?;
+            .map_err(|_| failure("Hyper-V : impossible de lancer PowerShell. Vérifiez le chemin configuré et les dépendances."))?;
         let output = child
             .stdout
             .take()
@@ -164,31 +161,6 @@ pub fn run(server: &Server, secret: &str, action: &str, id: &str) -> Result<Vec<
                 }
             }
         };
-        if status.code() == Some(10) {
-            return Err(failure(
-                "Hyper-V Linux : pypsrp absent. Installez pypsrp>=0.8.1,<0.9 dans un environnement Python et sélectionnez son interpréteur dans le profil.",
-            ));
-        }
-        if cfg!(not(windows)) {
-            match status.code() {
-                Some(11) => {
-                    return Err(failure(
-                        "Hyper-V Linux : certificat WinRM refusé. Vérifiez le CA PEM et le nom DNS du serveur.",
-                    ));
-                }
-                Some(12) => {
-                    return Err(failure(
-                        "Hyper-V Linux : authentification NTLM refusée. Vérifiez le compte, le domaine et la politique NTLM du serveur.",
-                    ));
-                }
-                Some(13) => {
-                    return Err(failure(
-                        "Hyper-V Linux : hôte WinRM inaccessible. Vérifiez HTTPS, le port, le réseau et le pare-feu.",
-                    ));
-                }
-                _ => {}
-            }
-        }
         if !status.success() {
             return Err(failure(
                 "Hyper-V : opération refusée. Vérifiez WinRM, le certificat, les identifiants, les droits Hyper-V et les modules Hyper-V / FailoverClusters. Aucun arrêt forcé de secours n’a été demandé.",
