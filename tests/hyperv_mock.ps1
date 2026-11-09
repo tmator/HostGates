@@ -4,7 +4,12 @@ $adapter = Get-Content -Raw -LiteralPath (Join-Path $PSScriptRoot '../src/hyperv
 $mock = @'
 $global:mockState = 'Running'
 function Import-Module { param($Name,$ErrorAction) }
-function New-PSSessionOption { param($OpenTimeout,$OperationTimeout) @{ } }
+function New-PSSessionOption {
+    param($OpenTimeout,$OperationTimeout,[switch]$SkipCACheck,[switch]$SkipCNCheck,[switch]$SkipRevocationCheck)
+    $expected = $request.skip_tls_verification -eq $true
+    if ($SkipCACheck.IsPresent -ne $expected -or $SkipCNCheck.IsPresent -ne $expected -or $SkipRevocationCheck.IsPresent -ne $expected) { throw 'TLS exception scope mismatch' }
+    @{ }
+}
 function Get-ClusterNode { [PSCustomObject]@{Name='node1'}; [PSCustomObject]@{Name='node2'} }
 function Get-CimInstance { param($ClassName,$ErrorAction) [PSCustomObject]@{PartOfDomain=$true;Domain='example.test'} }
 function Invoke-Command {
@@ -34,8 +39,9 @@ function Start-VM {
     $global:mockState = 'Running'
 }
 '@
+foreach ($skipCertificate in @($false,$true)) {
 foreach ($action in @('list','console','start','shutdown','reboot','stop')) {
-    $payload = @{url='https://node1.example.test:5986'; identity='LAB\tester'; secret="synthetic';throw 'injected"; cluster=$true; action=$action; id='bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb'} | ConvertTo-Json -Compress
+    $payload = @{url='https://node1.example.test:5986'; identity='LAB\tester'; secret="synthetic';throw 'injected"; cluster=$true; skip_tls_verification=$skipCertificate; action=$action; id='bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb'} | ConvertTo-Json -Compress
     $result = $payload | & "$env:SystemRoot/System32/WindowsPowerShell/v1.0/powershell.exe" -NoLogo -NoProfile -NonInteractive -Command ($mock + "`n" + $adapter)
     if ($LASTEXITCODE -ne 0) { throw "Mock failed: $action" }
     $rows = $result | ConvertFrom-Json
@@ -43,4 +49,6 @@ foreach ($action in @('list','console','start','shutdown','reboot','stop')) {
         if ($rows.Count -ne 2) { throw ("Missing cluster VMs: " + $result) }
     } elseif ($rows.Count -ne 1 -or $rows[0].node -ne 'node2.example.test') { throw 'Owner resolution failed' }
     Write-Output "PASS Hyper-V mock $action"
+}
+
 }

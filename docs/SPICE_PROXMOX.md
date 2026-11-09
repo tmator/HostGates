@@ -43,7 +43,7 @@ Un fichier temporaire `.vv` contient le ticket en clair avec des droits limités
 - **HTTP 401 — Jeton API refusé** : vérifier le realm, le nom du jeton, son secret et son expiration ; ne pas mettre le préfixe `PVEAPIToken=` dans l’identifiant. Vérifier la transmission de l’en-tête Authorization par un éventuel reverse proxy.
 - **Droits insuffisants / liste vide** : vérifier les ACL du compte et du jeton.
 - **Affichage SPICE absent** : modifier l’affichage côté Proxmox, puis actualiser/démarrer la VM.
-- **Proxy SPICE inaccessible** : HostGates teste son port TCP avant le lancement, sans envoyer de ticket. Le port 3128 doit être accessible depuis le poste ; un accès au seul port HTTPS 8006 ou au reverse proxy Web ne suffit pas. Ce contrôle ne valide pas le protocole SPICE.
+- **Message « vérifier le port SPICE » de la bêta 3** : le test TCP préalable de HostGates a été retiré. Il pouvait bloquer remote-viewer alors que ce dernier disposait de son propre accès réseau. Le client effectue désormais directement la connexion. Le champ Hôte du proxy SPICE doit correspondre au proxy utilisé avec votre autre client ; un accès Web sur 8006 ne suffit pas à lui seul pour SPICE.
 - **Le client s’ouvre sans connexion** : vérifier le proxy SPICE et le port 3128. Relancer pour obtenir un ticket neuf. Les erreurs propres au client apparaissent dans sa fenêtre.
 
 ## Validation et périmètre

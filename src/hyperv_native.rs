@@ -26,15 +26,13 @@ fn credentials(identity: &str, secret: &str) -> WinrmCredentials {
 
 fn client(server: &Server, secret: &str) -> Result<WinrmClient> {
     let url = url::Url::parse(&server.url).map_err(|_| failure("Hyper-V : URL invalide."))?;
-    if url.scheme() != "https" || server.skip_tls_verification {
-        return Err(failure(
-            "Hyper-V natif : HTTPS avec certificat vérifié est requis.",
-        ));
+    if url.scheme() != "https" {
+        return Err(failure("Hyper-V natif : HTTPS est requis."));
     }
     let config = WinrmConfig {
         port: Some(url.port().unwrap_or(5986)),
         use_tls: true,
-        accept_invalid_certs: false,
+        accept_invalid_certs: server.skip_tls_verification,
         auth_method: AuthMethod::Ntlm,
         connect_timeout_secs: 15,
         operation_timeout_secs: 20,
@@ -49,7 +47,7 @@ fn client(server: &Server, secret: &str) -> Result<WinrmClient> {
         .platform_roots(true)
         .log_soap_bodies(false)
         .non_interactive_powershell(true);
-    if !server.ca_file.as_os_str().is_empty() {
+    if !server.skip_tls_verification && !server.ca_file.as_os_str().is_empty() {
         builder = builder.add_root_certificates_pem(&server.ca_file);
     }
     builder.build().map_err(|_| {

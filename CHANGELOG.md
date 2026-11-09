@@ -1,5 +1,10 @@
 # Journal des versions
 
+## 0.9.0-beta.4 — 9 novembre 2026 (bêta)
+
+- SPICE : suppression du test TCP bloquant ajouté en bêta 3 ; remote-viewer effectue directement la connexion.
+- Hyper-V Windows/Linux : exception explicite de certificat HTTPS par profil, désactivée par défaut, applicable aux nœuds du cluster sans modifier les autres profils.
+
 ## 0.9.0-beta.3 — 9 novembre 2026 (bêta)
 
 - Hyper-V Linux : transport WinRM intégré en Rust, sans Python/pypsrp ; inventaire des clusters et commandes existantes conservés. FreeRDP reste nécessaire aux consoles.

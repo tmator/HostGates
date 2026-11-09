@@ -192,7 +192,25 @@ fn native_https_checks_ca_before_auth_and_refuses_redirects() {
     let trusted = client(&server, "synthetic-secret").expect("native WinRM test fixture");
     let result = runtime.block_on(trusted.create_shell("localhost"));
     assert!(result.is_err());
+    // The explicit exception permits the certificate, but never redirects.
+    server.skip_tls_verification = true;
+    server.ca_file = "missing-ignored-ca.pem".into();
+    let exception = client(&server, "synthetic-secret").expect("explicit TLS exception");
+    assert!(
+        runtime
+            .block_on(exception.create_shell("localhost"))
+            .is_err()
+    );
+    assert_eq!(requests.load(Ordering::Relaxed), 2);
+    server.skip_tls_verification = false;
+    server.ca_file.clear();
+    let strict_again = client(&server, "synthetic-secret").expect("strict profile restored");
+    assert!(
+        runtime
+            .block_on(strict_again.create_shell("localhost"))
+            .is_err()
+    );
     stop.store(true, Ordering::Relaxed);
     thread.join().expect("native WinRM test fixture");
-    assert_eq!(requests.load(Ordering::Relaxed), 1);
+    assert_eq!(requests.load(Ordering::Relaxed), 2);
 }

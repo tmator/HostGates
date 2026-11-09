@@ -706,7 +706,8 @@ impl HostGates {
                     Operation::Console(vmid) => {
                         let config = api.console(&server, vmid)?;
                         let received = Instant::now();
-                        config.check_proxy()?;
+                        // The viewer may use a different firewall/proxy route than HostGates.
+                        // Do not block it based on a separate TCP probe.
                         Ok(Completed::Console(
                             config,
                             format!("{} · VM {vmid}", server.name),
@@ -978,6 +979,10 @@ impl HostGates {
                         &mut draft.save,
                         crate::i18n::tr("Enregistrer dans le coffre"),
                     );
+                    ui.checkbox(&mut draft.server.skip_tls_verification, crate::i18n::tr("Ne pas vérifier le certificat HTTPS"));
+                    if draft.server.skip_tls_verification {
+                        ui.colored_label(ui.visuals().warn_fg_color, crate::i18n::tr("Attention : l’identité du serveur n’est plus vérifiée. Vos identifiants peuvent être interceptés. Le certificat CA configuré est ignoré."));
+                    }
                     if draft.server.hyperv {
                         ui.checkbox(&mut draft.server.cluster, crate::i18n::tr("Lister tout le cluster depuis cet hôte"));
                         #[cfg(windows)]
@@ -989,14 +994,10 @@ impl HostGates {
                         {
                         ui.small(crate::i18n::tr("Linux : WinRM HTTPS natif et FreeRDP. Aucun Python requis. Consultez l’aide Hyper-V."));
                         program_picker(ui, "FreeRDP (Hyper-V)", &mut draft.server.hyperv_freerdp);
-                        program_picker(ui, &crate::i18n::tr("Certificat CA PEM (facultatif)"), &mut draft.server.ca_file);
+                        ui.add_enabled_ui(!draft.server.skip_tls_verification, |ui| { program_picker(ui, &crate::i18n::tr("Certificat CA PEM (facultatif)"), &mut draft.server.ca_file); });
                         }
 
                     } else {
-                    ui.checkbox(&mut draft.server.skip_tls_verification, crate::i18n::tr("Ne pas vérifier le certificat HTTPS"));
-                    if draft.server.skip_tls_verification {
-                        ui.colored_label(ui.visuals().warn_fg_color, crate::i18n::tr("Attention : l’identité du serveur n’est plus vérifiée. Vos identifiants peuvent être interceptés. Le certificat CA configuré est ignoré."));
-                    }
                     ui.add_enabled_ui(!draft.server.skip_tls_verification, |ui| {
                     ui.label(crate::i18n::tr("Certificat CA PEM (facultatif)"));
                     ui.horizontal(|ui| {

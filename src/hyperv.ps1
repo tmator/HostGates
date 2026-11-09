@@ -10,7 +10,13 @@ try {
     $settings = @{ Credential = $credential; Authentication = 'Negotiate'; ErrorAction = 'Stop' }
     if ($uri.Scheme -eq 'https') { $settings.UseSSL = $true }
     $settings.Port = $uri.Port
-    $settings.SessionOption = New-PSSessionOption -OpenTimeout 15000 -OperationTimeout 90000
+    $sessionOptions = @{ OpenTimeout = 15000; OperationTimeout = 90000 }
+    if ($uri.Scheme -eq 'https' -and $request.skip_tls_verification -eq $true) {
+        $sessionOptions.SkipCACheck = $true
+        $sessionOptions.SkipCNCheck = $true
+        $sessionOptions.SkipRevocationCheck = $true
+    }
+    $settings.SessionOption = New-PSSessionOption @sessionOptions
     $nodes = @($uri.DnsSafeHost)
     if ($request.cluster) {
         $nodes = @(Invoke-Command -ComputerName $uri.DnsSafeHost @settings -ScriptBlock {

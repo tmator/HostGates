@@ -108,27 +108,6 @@ fn spice_files_require_tls_and_cannot_inject_viewer_options() {
     assert!(serde_json::from_value::<SpiceConfig>(bad).is_err());
 }
 
-#[test]
-fn spice_proxy_diagnostic_never_sends_or_exposes_tickets() {
-    use std::io::Read;
-    let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
-    let address = listener.local_addr().unwrap();
-    let cert = rcgen::generate_simple_self_signed(vec!["localhost".into()]).unwrap();
-    let mut data = configuration(&cert.cert.pem());
-    data["proxy"] = json!(format!("http://{address}"));
-    let config: SpiceConfig = serde_json::from_value(data).unwrap();
-    config.check_proxy().unwrap();
-    let (mut socket, _) = listener.accept().unwrap();
-    let mut bytes = [0; 32];
-    assert_eq!(socket.read(&mut bytes).unwrap(), 0);
-    drop(socket);
-    drop(listener);
-    let error = config.check_proxy().unwrap_err().to_string();
-    assert!(error.contains("inaccessible"));
-    assert!(!error.contains("synthetic-ticket"));
-    assert!(!error.contains("synthetic-password"));
-}
-
 // Real local TLS transport, synthetic credentials only. Each response closes its
 // connection, exercising clients that cannot rely on connection reuse.
 struct Mock {

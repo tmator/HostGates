@@ -43,7 +43,7 @@ Les dix nouvelles traductions sont automatiques avec corrections ciblées. Le re
 
 ## Télécharger
 
-La [préversion 0.9.0-beta.3](https://github.com/tmator/HostGates/releases/tag/v0.9.0-beta.3) fournit l'exécutable Windows x64, son archive avec documentation et licences, ainsi que les paquets Linux **DEB et RPM pour x86-64**, accompagnés de leurs empreintes SHA-256. Les instructions de [compilation Windows](docs/BUILD_WINDOWS.md) et [compilation Linux](docs/BUILD_LINUX.md) sont disponibles dans la documentation.
+La [préversion 0.9.0-beta.4](https://github.com/tmator/HostGates/releases/tag/v0.9.0-beta.4) fournit l'exécutable Windows x64, son archive avec documentation et licences, ainsi que les paquets Linux **DEB et RPM pour x86-64**, accompagnés de leurs empreintes SHA-256. Les instructions de [compilation Windows](docs/BUILD_WINDOWS.md) et [compilation Linux](docs/BUILD_LINUX.md) sont disponibles dans la documentation.
 
 Pour Linux : **Debian 12+ / Ubuntu 22.04+** (DEB), **RHEL / Rocky / AlmaLinux 9+ et Fedora récent** (RPM). Installation et démarrage graphique de contrôle validés en conteneurs sur Debian 12, Ubuntu 22.04.5, Rocky 9.8 et Fedora 44. RHEL et AlmaLinux restent des cibles de compatibilité sans test direct. Voir le [guide des paquets Linux](docs/LINUX_PACKAGES.md).
 
@@ -51,7 +51,7 @@ Pour Linux : **Debian 12+ / Ubuntu 22.04+** (DEB), **RHEL / Rocky / AlmaLinux 9+
 
 HostGates est sous [licence MIT](licence.md). Voir [licences tierces et compatibilité MobaXterm](docs/LICENSING.md) pour les conditions de redistribution. HostGates est un projet indépendant, sans affiliation à Mobatek.
 
-Fermer les anciennes versions avant de lancer `target/release/HostGates-0.9.0-beta.3.exe`. Le coffre maître est verrouillé au démarrage et ferme les connexions après 10 minutes sans interaction. Les anciens binaires ne connaissent pas ce coffre : ne pas les utiliser après migration des secrets.
+Fermer les anciennes versions avant de lancer `target/release/HostGates-0.9.0-beta.4.exe`. Le coffre maître est verrouillé au démarrage et ferme les connexions après 10 minutes sans interaction. Les anciens binaires ne connaissent pas ce coffre : ne pas les utiliser après migration des secrets.
 
 Compilation 0.3.1 : OpenSSL est compilé et lié statiquement avec SSH. Perl et un compilateur C sont nécessaires. Sous Windows, installer Strawberry Perl et le rendre disponible dans le PATH. Sous Linux, installer `perl`, `make` et `build-essential`. Ces outils ne sont pas nécessaires pour exécuter le binaire compilé.
 
@@ -63,7 +63,7 @@ Le menu d’import accepte aussi les fichiers `.rdp` (UTF-8 / UTF-16 avec BOM) :
 
 ## Version 0.9 (bêta)
 
-RDP intégré avec RD Gateway/RDS, import `.rdp`, plein écran et choix du client par défaut. Voir le [journal des versions](CHANGELOG.md) et les [notes détaillées](docs/RELEASE_0.9.0-beta.3.md).
+RDP intégré avec RD Gateway/RDS, import `.rdp`, plein écran et choix du client par défaut. Voir le [journal des versions](CHANGELOG.md) et les [notes détaillées](docs/RELEASE_0.9.0-beta.4.md).
 
 ### Hyper-V, actions Proxmox et LXC
 

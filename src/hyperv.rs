@@ -28,11 +28,6 @@ pub fn validate(server: &Server) -> Result<url::Url> {
             "Hyper-V : utilisez https://hote:5986 et un compte DOMAINE\\utilisateur.",
         ));
     }
-    if server.skip_tls_verification {
-        return Err(failure(
-            "Hyper-V : installez le certificat de confiance dans Windows. La vérification WinRM ne peut pas être désactivée. Sous Linux, configurez un CA PEM dans le profil.",
-        ));
-    }
     if cfg!(windows)
         && !server.vmconnect.as_os_str().is_empty()
         && (!server.vmconnect.is_absolute() || !server.vmconnect.is_file())
@@ -48,7 +43,9 @@ pub fn validate(server: &Server) -> Result<url::Url> {
                 "Hyper-V Linux : HTTPS WinRM est requis (port 5986).",
             ));
         }
-        for path in [&server.hyperv_freerdp, &server.ca_file] {
+        for path in std::iter::once(&server.hyperv_freerdp)
+            .chain((!server.skip_tls_verification).then_some(&server.ca_file))
+        {
             if !path.as_os_str().is_empty() && (!path.is_absolute() || !path.is_file()) {
                 return Err(failure(
                     "Hyper-V Linux : sélectionnez un chemin absolu existant.",
@@ -94,6 +91,7 @@ pub fn run(server: &Server, secret: &str, action: &str, id: &str) -> Result<Vec<
             action: &'a str,
             id: &'a str,
             ca_file: &'a std::path::Path,
+            skip_tls_verification: bool,
         }
         let payload = zeroize::Zeroizing::new(
             serde_json::to_vec(&Request {
@@ -104,6 +102,7 @@ pub fn run(server: &Server, secret: &str, action: &str, id: &str) -> Result<Vec<
                 action,
                 id,
                 ca_file: &server.ca_file,
+                skip_tls_verification: server.skip_tls_verification,
             })
             .map_err(|_| failure("Hyper-V : requête invalide."))?,
         );
@@ -370,7 +369,7 @@ mod tests {
         assert!(freerdp_arguments(&vm, "alice\n/p:bad").is_err());
     }
     #[test]
-    fn hyperv_profile_rejects_embedded_secrets_and_tls_bypass() {
+    fn hyperv_profile_rejects_embedded_secrets_and_defaults_to_verified_tls() {
         let mut server = Server {
             hyperv: true,
             name: "Lab".into(),
@@ -390,7 +389,7 @@ mod tests {
         }
         server.url = "https://node.example:5986".into();
         server.skip_tls_verification = true;
-        assert!(server.validate().is_err());
+        assert!(server.validate().is_ok());
         server.skip_tls_verification = false;
         assert!(run(&server, "synthetic-secret", "stop", "not-a-guid").is_err());
         assert!(
