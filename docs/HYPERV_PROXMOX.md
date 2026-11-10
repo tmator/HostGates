@@ -84,3 +84,15 @@ Le contour permet de distinguer aussi le rond noir sur un thème sombre. Les ét
 Les tests HTTPS utilisent un serveur simulé local (routage QEMU/LXC, migration, tâches, erreurs, absence de coupure de secours, authentification et transport de console WebSocket, redimensionnement, fermeture et certificats). `tests/hyperv_mock.ps1` remplace entièrement les commandes distantes par des doubles de test et vérifie les actions et le propriétaire d’une VM de cluster. Aucune VM réelle n’est modifiée par ces tests. La validation dans une infrastructure Hyper-V réelle reste nécessaire.
 
 Références : [gestion distante Hyper-V](https://learn.microsoft.com/en-us/windows-server/virtualization/hyper-v/manage/remotely-manage-hyper-v-hosts), [Stop-VM](https://learn.microsoft.com/en-us/powershell/module/hyper-v/stop-vm), [API Proxmox](https://pve.proxmox.com/pve-docs/api-viewer/).
+
+## Diagnostic NTLM Linux (bêta 6)
+
+Le bouton **Copier le diagnostic** sous l’erreur copie la version et un message filtré. Le format `DOMAINE\utilisateur` est pris en charge ; utilisez le domaine Windows approprié au compte.
+
+- `NTLM-AUTH-401` : réponse d’authentification rejetée ; compte/mot de passe/politiques et éventuellement CBT en HTTPS à examiner.
+- `NTLM-NEGOTIATE-HTTP-…` : réponse HTTP inattendue avant authentification ; vérifier l’écouteur WinRM et `/wsman`.
+- `NTLM-NO-CHALLENGE` / `NTLM-CHALLENGE-SCHEME` : absence du défi Negotiate attendu.
+- `NTLM-FLAG-…` / `NTLM-TARGET-…` : défi incompatible avant envoi de la réponse d’authentification ; cela ne signifie pas que le mot de passe est faux.
+- `NTLM-SESSION-401` / `NTLM-MESSAGE-INTEGRITY` : problème de session authentifiée ou de vérification des messages. Aucune commande n’est rejouée automatiquement.
+
+Ne pas activer Basic ou AllowUnencrypted pour contourner ces erreurs. Les en-têtes d’authentification, défis NTLM et réponses SOAP ne sont pas inclus dans le diagnostic.

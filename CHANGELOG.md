@@ -1,5 +1,11 @@
 # Journal des versions
 
+## 0.9.0-beta.6 — 10 novembre 2026 (bêta de diagnostic)
+
+- SPICE : diagnostic copiable avec proxy, canal et code réseau natif, sans ticket ni mot de passe.
+- Hyper-V Linux : distingue le refus du compte, le défi NTLM incompatible, les capacités manquantes et les erreurs de session chiffrée.
+- Aucun changement des exigences de chiffrement ou de validation de certificat.
+
 ## 0.9.0-beta.5 — 10 novembre 2026 (bêta)
 
 - Consoles SPICE Proxmox dans les onglets via libspice-client-glib, clavier/souris, curseur et plein écran ; aucun processus remote-viewer ni fichier .vv. Bibliothèques natives installées séparément.

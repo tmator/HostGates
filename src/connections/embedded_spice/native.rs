@@ -3,12 +3,21 @@
 use super::*;
 use libloading::Library;
 use std::{
-    ffi::{c_char, c_int, c_uint, c_ulong, c_void},
+    ffi::{CStr, c_char, c_int, c_uint, c_ulong, c_void},
     ptr::{null, null_mut},
     sync::{OnceLock, mpsc},
     time::Duration,
 };
 type Obj = *mut c_void;
+#[repr(C)]
+struct NativeError {
+    domain: c_uint,
+    code: c_int,
+    message: *const c_char,
+}
+type GetError = unsafe extern "C" fn(Obj) -> *const NativeError;
+type QuarkName = unsafe extern "C" fn(c_uint) -> *const c_char;
+
 #[repr(C)]
 struct List {
     data: Obj,
@@ -51,6 +60,8 @@ unsafe fn library(path: &Path) -> Result<Library> {
     result.map_err(|_|error("SPICE : chargement de la bibliothèque impossible. Vérifiez ses dépendances et l’architecture 64 bits."))
 }
 api! {
+    error:GetError = spice,"spice_channel_get_error";
+    quark:QuarkName = glib,"g_quark_to_string";
     new:unsafe extern "C" fn()->Obj = spice,"spice_session_new";
     connect:unsafe extern "C" fn(Obj)->c_int = spice,"spice_session_connect";
     disconnect:unsafe extern "C" fn(Obj) = spice,"spice_session_disconnect";
@@ -100,6 +111,8 @@ struct ChannelData {
     kind: i32,
     id: i32,
     opened: AtomicBool,
+    error: GetError,
+    quark: QuarkName,
 }
 struct Channel {
     object: Obj,
@@ -116,9 +129,20 @@ struct Session {
     last_position: Option<(i32, i32)>,
     received_frame: bool,
 }
-unsafe extern "C" fn event(_channel: Obj, event: c_int, data: Obj) {
+unsafe extern "C" fn event(channel: Obj, event: c_int, data: Obj) {
     // Signal userdata is owned by Channel and disconnected before that Box is dropped.
     let data = unsafe { &*data.cast::<ChannelData>() };
+    let channel_name = match data.kind {
+        1 => "main",
+        2 => "display",
+        3 => "inputs",
+        4 => "cursor",
+        _ => "other",
+    };
+    data.shared.diagnostic(format!(
+        "Canal {channel_name}/{} : événement {event}",
+        data.id
+    ));
     if event == 10 {
         data.opened.store(true, Ordering::Release);
     }
@@ -131,9 +155,58 @@ unsafe extern "C" fn event(_channel: Obj, event: c_int, data: Obj) {
             24 => "SPICE : connexion interrompue.",
             _ => "SPICE : connexion fermée.",
         };
-        data.shared.status(message, true);
+        let native = unsafe { (data.error)(channel) };
+        let detail = if native.is_null() {
+            "Détail natif indisponible.".into()
+        } else {
+            let native = unsafe { &*native };
+            let name = unsafe { (data.quark)(native.domain) };
+            let domain = if name.is_null() {
+                ""
+            } else {
+                unsafe { CStr::from_ptr(name) }.to_str().unwrap_or("")
+            };
+            // Never read or display GError.message: it may contain the proxy ticket.
+            network_detail(domain, native.code)
+        };
+        data.shared.diagnostic(detail.clone());
+        data.shared.status(&format!("{message} {detail}"), true);
         data.shared.stop.store(true, Ordering::Release);
     }
+}
+fn network_detail(domain: &str, code: i32) -> String {
+    let (family, reason) = match domain {
+        "g-io-error-quark" => (
+            "GIO",
+            match code {
+                24 => "Délai réseau dépassé.",
+                28 => "Nom du proxy introuvable (DNS).",
+                37 => "Hôte inaccessible.",
+                38 => "Réseau inaccessible.",
+                39 => "Connexion TCP refusée : vérifier l’adresse et le port du proxy SPICE.",
+                40 => {
+                    "Le proxy a refusé la requête CONNECT : vérifier le service sur ce port et le routage Proxmox."
+                }
+                41 => "Authentification du proxy refusée.",
+                42 => "Le proxy exige une authentification.",
+                43 => "Le proxy interdit cette destination.",
+                44 => "Connexion fermée par le proxy ou le serveur.",
+                15 => "Protocole/proxy non pris en charge par la bibliothèque.",
+                _ => "Erreur de transport native.",
+            },
+        ),
+        "g-resolver-error-quark" => (
+            "DNS",
+            match code {
+                0 => "Nom introuvable.",
+                1 => "Résolution DNS temporairement indisponible.",
+                _ => "Échec du résolveur DNS.",
+            },
+        ),
+        "g-tls-error-quark" => ("TLS", "Échec TLS du transport natif."),
+        _ => ("native", "Erreur native non catégorisée."),
+    };
+    format!("[{family}:{code}] {reason}")
 }
 unsafe extern "C" fn invalidate(
     _channel: Obj,
@@ -223,6 +296,9 @@ unsafe extern "C" fn cursor_reset(_channel: Obj, data: Obj) {
 }
 impl Session {
     unsafe fn new(api: &Api, request: Request) -> Result<Self> {
+        request
+            .shared
+            .diagnostic("Bibliothèque native chargée ; ouverture de la session.".into());
         let config = request.config;
         let object = unsafe { (api.new)() };
         if object.is_null() {
@@ -324,6 +400,8 @@ impl Session {
                     kind,
                     id,
                     opened: AtomicBool::new(false),
+                    error: api.error,
+                    quark: api.quark,
                 });
                 let user = (&mut *data as *mut ChannelData).cast();
                 let mut signals = vec![unsafe {
@@ -629,6 +707,84 @@ fn worker(rx: mpsc::Receiver<Request>) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn native_network_categories_are_actionable_and_do_not_echo_unknown_domains() {
+        assert!(network_detail("g-io-error-quark", 39).contains("TCP refusée"));
+        assert!(network_detail("g-io-error-quark", 40).contains("CONNECT"));
+        assert!(network_detail("g-resolver-error-quark", 0).contains("DNS:0"));
+        assert!(!network_detail("synthetic-ticket", 123).contains("synthetic-ticket"));
+    }
+    #[test]
+    #[ignore = "requires installed native SPICE library and local sockets"]
+    fn native_proxy_rejection_reports_safe_reason() {
+        use std::{
+            io::{Read, Write},
+            net::TcpListener,
+        };
+        let listener = TcpListener::bind("127.0.0.1:0").expect("proxy fixture");
+        let port = listener.local_addr().expect("proxy address").port();
+        listener.set_nonblocking(true).expect("nonblocking");
+        let thread = std::thread::spawn(move || {
+            let start = Instant::now();
+            let mut socket = loop {
+                if let Ok((s, _)) = listener.accept() {
+                    break s;
+                }
+                assert!(
+                    start.elapsed() < Duration::from_secs(10),
+                    "proxy connection absent"
+                );
+                std::thread::sleep(Duration::from_millis(5));
+            };
+            socket.set_nonblocking(false).expect("blocking");
+            socket
+                .set_read_timeout(Some(Duration::from_secs(5)))
+                .expect("timeout");
+            let mut request = Vec::new();
+            let mut byte = [0];
+            while !request.ends_with(b"\r\n\r\n") {
+                socket.read_exact(&mut byte).expect("CONNECT header");
+                request.push(byte[0]);
+                assert!(request.len() < 16384);
+            }
+            assert!(request.starts_with(b"CONNECT synthetic-opaque-ticket:15901 "));
+            socket
+                .write_all(b"HTTP/1.0 403 synthetic-private-reason\r\nContent-Length: 0\r\n\r\n")
+                .expect("proxy rejection");
+        });
+        let ca = rcgen::generate_simple_self_signed(vec!["test.invalid".into()]).expect("test CA");
+        let config:SpiceConfig=serde_json::from_value(serde_json::json!({"type":"spice","host":"synthetic-opaque-ticket","proxy":format!("http://127.0.0.1:{port}"),"tls-port":15901,"host-subject":"CN=test","ca":ca.cert.pem(),"password":"synthetic-password"})).expect("config");
+        let ctx = egui::Context::default();
+        let mut session =
+            EmbeddedSpice::new(config, &runtime_path("").expect("runtime"), &ctx).expect("session");
+        let started = Instant::now();
+        while !session.closed {
+            session.poll(&ctx);
+            assert!(started.elapsed() < Duration::from_secs(12), "timeout");
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        let report = session
+            .shared
+            .state
+            .lock()
+            .expect("state")
+            .diagnostics
+            .iter()
+            .cloned()
+            .collect::<Vec<_>>()
+            .join("\n");
+        assert!(report.contains("GIO:"), "missing native code");
+        assert!(report.contains("main/0"));
+        for secret in [
+            "synthetic-opaque-ticket",
+            "synthetic-password",
+            "synthetic-private-reason",
+        ] {
+            assert!(!report.contains(secret));
+            assert!(!session.status.contains(secret));
+        }
+        thread.join().expect("proxy server");
+    }
     #[test]
     fn bounded_surface_conversion_handles_padding_and_negative_stride() {
         let mut pixels = vec![3, 2, 1, 0, 0, 0, 0, 0, 6, 5, 4, 0, 0, 0, 0, 0];

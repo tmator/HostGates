@@ -395,5 +395,7 @@
   "Linux : WinRM HTTPS natif et FreeRDP. Aucun Python requis. Consultez l’aide Hyper-V.": "Linux: ネイティブ WinRM HTTPS と FreeRDP。Python は不要です。Hyper-V のヘルプを参照してください。",
   "Linux : WinRM HTTP/HTTPS natif et FreeRDP. En HTTP, les messages sont chiffrés avec NTLM.": "Linux：ネイティブ HTTP/HTTPS WinRM と FreeRDP。HTTP メッセージは NTLM で暗号化されます。",
   "SPICE (bibliothèque native / ancien remote-viewer)": "SPICE（ネイティブライブラリ／従来の remote-viewer）",
-  "Transport WinRM": "WinRM トランスポート"
+  "Transport WinRM": "WinRM トランスポート",
+  "Diagnostic de connexion": "接続診断",
+  "Copier le diagnostic": "診断をコピー"
 }

@@ -60,3 +60,9 @@ Références : [API Proxmox](https://pve.proxmox.com/pve-docs/api-viewer/), [imp
 ## Reproduire le test SPICE local
 
 Sous Linux/WSL, installer QEMU (`qemu-system-x86`) et OpenSSL, puis lancer `python3 scripts/spice-test-server.py`. Le script démarre une VM BIOS sans disque, un proxy local et un certificat de test. Il affiche le chemin du fichier JSON synthétique. Dans un autre terminal, définir `HOSTGATES_SPICE_FIXTURE` vers ce chemin puis lancer `cargo test --lib native_qemu -- --ignored`. Pour tester le client Windows depuis un serveur WSL, utiliser `--directory` avec un dossier partagé et donner à la variable Windows le chemin Windows du JSON. Ctrl+C ferme le banc de test. Aucun serveur réel, coffre ou ticket de production n’est nécessaire.
+
+## Diagnostic de connexion (bêta 6)
+
+Dans l’onglet SPICE, déplier **Diagnostic de connexion**, puis **Copier le diagnostic** après l’échec. Le rapport contient la version, le proxy réellement utilisé, le port TLS cible, les événements des canaux et la catégorie native GIO/DNS/TLS. Les tickets, l’hôte opaque Proxmox, les mots de passe et les messages serveur bruts sont exclus. Le rapport reste en mémoire, limité aux 64 dernières entrées. Il contient l’adresse du proxy, que vous pouvez masquer avant partage.
+
+`GIO:39` indique un refus TCP ; `GIO:40` un échec CONNECT au proxy ; `GIO:43` une destination interdite par le proxy ; `DNS:0` un nom introuvable. Ces codes servent à orienter le diagnostic, sans prouver à eux seuls une erreur de configuration du serveur. Aucun test préalable n’empêche la connexion et aucune vérification TLS n’est désactivée.
