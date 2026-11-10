@@ -9,7 +9,7 @@ try {
     $request.secret = $null
     $settings = @{ Credential = $credential; Authentication = 'Negotiate'; ErrorAction = 'Stop' }
     if ($uri.Scheme -eq 'https') { $settings.UseSSL = $true }
-    $settings.Port = $uri.Port
+    $settings.Port = if ($uri.IsDefaultPort) { if ($uri.Scheme -eq 'https') { 5986 } else { 5985 } } else { $uri.Port }
     $sessionOptions = @{ OpenTimeout = 15000; OperationTimeout = 90000 }
     if ($uri.Scheme -eq 'https' -and $request.skip_tls_verification -eq $true) {
         $sessionOptions.SkipCACheck = $true

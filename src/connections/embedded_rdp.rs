@@ -692,7 +692,7 @@ fn map_position(pos: egui::Pos2, rect: egui::Rect, size: [usize; 2]) -> (u16, u1
             .clamp(0., size[1].saturating_sub(1) as f32) as u16,
     )
 }
-fn scan_code(key: Key, shortcut: bool) -> Option<(u8, bool)> {
+pub(crate) fn scan_code(key: Key, shortcut: bool) -> Option<(u8, bool)> {
     Some(match key {
         Key::Enter => (0x1c, false),
         Key::Escape => (1, false),

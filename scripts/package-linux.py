@@ -99,7 +99,7 @@ Priority: optional
 Architecture: amd64
 Maintainer: Brice Rouanet <tmator@gmail.com>
 Installed-Size: {size}
-Depends: {dependencies}
+Depends: {dependencies}, libspice-client-glib-2.0-8
 Recommends: xdg-desktop-portal, xdg-desktop-portal-gtk | xdg-desktop-portal-kde, gnome-keyring
 Suggests: openssh-client, tigervnc-viewer
 Homepage: https://github.com/tmator/HostGates
@@ -126,7 +126,7 @@ URL: https://github.com/tmator/HostGates
 ExclusiveArch: x86_64
 Requires: libX11.so.6()(64bit), libXcursor.so.1()(64bit), libXrandr.so.2()(64bit), libXi.so.6()(64bit)
 Requires: libxkbcommon.so.0()(64bit), libxkbcommon-x11.so.0()(64bit), libwayland-client.so.0()(64bit)
-Requires: libEGL.so.1()(64bit), libGL.so.1()(64bit), xdg-utils
+Requires: libEGL.so.1()(64bit), libGL.so.1()(64bit), xdg-utils, spice-glib
 Recommends: xdg-desktop-portal, gnome-keyring
 
 %description

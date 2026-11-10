@@ -266,13 +266,19 @@ livraison des travaux en cours ; une requête réseau déjà démarrée peut ter
 dans son thread avant libération du secret (délai maximal de 20 s par requête).
 Une tentative annulée ne lance aucun client après réception de sa réponse.
 
-SPICE utilise remote-viewer externe : ticket frais et fichier .vv temporaire
-contenant le ticket EN CLAIR, protégé par ACL privée Windows ou mode 0600 Linux.
-Le fichier demande sa suppression par le client et est supprimé à la fermeture
-de l’onglet. Un arrêt brutal peut laisser un résidu dont le ticket expire.
-Seules les propriétés nécessaires sont écrites : type, hôte/proxy, port TLS, CA,
-sujet du certificat, ticket et suppression après lecture. Aucun script, chemin
-arbitraire ni option désactivant TLS provenant de l’API n’est transmis au client.
+SPICE utilise libspice-client-glib chargé depuis un chemin absolu de confiance,
+avec rendu dans egui. Aucun processus externe ni fichier .vv n’est créé.
+Le ticket et le CA restent en mémoire. Les chaînes temporaires Rust contenant
+le ticket sont effacées ; la bibliothèque C conserve ses propres copies dont
+l’effacement sécurisé n’est pas garanti. TLS est obligatoire sur tous les canaux,
+avec validation de la chaîne CA et du sujet transmis par Proxmox.
+Audio, USB, cartes à puce et partage de fichiers sont désactivés.
+Ne pas activer SPICE_DEBUG en production : les traces des bibliothèques tierces
+peuvent inclure des informations de connexion. Les messages UI sont filtrés.
+Les bibliothèques natives sont des dépendances de confiance à maintenir à jour.
+Elles sont chargées dynamiquement et restent chargées jusqu’à la fin du processus
+pour préserver les types GLib enregistrés. Leurs licences sont distinctes de MIT.
+
 La confiance dans le CA SPICE repose sur l’API HTTPS Proxmox authentifiée ;
 elle est compromise si la vérification du certificat API est désactivée.
 La mémoire du client externe et les copies internes HTTP ne peuvent pas être
@@ -292,7 +298,7 @@ Le double-clic LXC utilise maintenant la console Proxmox, sans SSH ni création 
 La validation TLS et le certificat CA du profil sont appliqués au WebSocket. L’exception explicite de certificat du profil s’applique également à WSS ; elle reste locale à ce profil. Aucun repli vers ws:// ou SSH n’est effectué. Les tailles de trames/messages et files d’attente sont limitées. L’arrêt local reste réactif même si la sortie terminal est pleine. Fermer la console ne garantit pas la déconnexion du shell distant persistant (dtach), conformément au fonctionnement Proxmox.
 
 Hyper-V Linux (ajout après 0.9.0-beta.1)
-Le transport WinRM Linux est intégré en Rust avec winrm-rs 2.0.0 : NTLM sur HTTPS, vérification du nom et du certificat par défaut, CA PEM facultatif par profil. HTTP, les redirections et les relances automatiques sont refusés. Les proxies d’environnement et les journaux SOAP sont désactivés. Les scripts PowerShell distants sont fixes ; seules une action autorisée et un UUID canonique sont interpolés. Les noms de VM et secrets ne le sont pas.
+Le transport WinRM Linux est intégré en Rust avec winrm-rs 2.0.0 : NTLM sur HTTP ou HTTPS, vérification du nom et du certificat par défaut, CA PEM facultatif par profil. En HTTP, le chiffrement/signature NTLM des messages est obligatoire (EncryptionMode::Always) ; Basic et les messages SOAP en clair ne sont pas utilisés. Les ports personnalisés sont acceptés. HTTPS vérifié reste préférable, notamment face aux attaques de relais NTLM. Les redirections et les relances automatiques sont refusées. Les proxies d’environnement et les journaux SOAP sont désactivés. Les scripts PowerShell distants sont fixes ; seules une action autorisée et un UUID canonique sont interpolés. Les noms de VM et secrets ne le sont pas.
 Les sorties de commande sont limitées à 4 Mio et le budget de gestion à 120 secondes. Le client borne également les réponses SOAP. Les identifiants restent en mémoire dans le processus Rust ; les conteneurs de secrets sont effacés à leur destruction, sans garantie d’effacement de toutes les copies des bibliothèques réseau ou du système. Aucun secret n’est transmis à un processus Python. Une action déjà acceptée par l’hôte peut continuer après un délai dépassé ; actualiser avant de réessayer.
 FreeRDP reçoit le mot de passe du profil par stdin, sans argument /p, fichier de mot de passe ou variable d’environnement. Le compte et le GUID restent des métadonnées visibles dans les arguments. Les certificats non approuvés sont refusés (/cert:deny), avec un magasin de confiance distinct de celui du profil WinRM. Le chemin FreeRDP désigne un exécutable choisi par l’utilisateur : ne sélectionner qu’un programme de confiance.
 

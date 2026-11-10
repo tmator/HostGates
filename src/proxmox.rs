@@ -626,14 +626,14 @@ impl Api {
 pub struct SpiceConfig {
     #[serde(rename = "type")]
     kind: String,
-    host: Secret,
-    proxy: String,
+    pub(crate) host: Secret,
+    pub(crate) proxy: String,
     #[serde(rename = "tls-port", deserialize_with = "port_from_json")]
-    tls_port: u16,
+    pub(crate) tls_port: u16,
     #[serde(rename = "host-subject")]
-    subject: String,
-    ca: String,
-    password: Secret,
+    pub(crate) subject: String,
+    pub(crate) ca: String,
+    pub(crate) password: Secret,
 }
 pub(crate) fn port_from_json<'de, D: serde::Deserializer<'de>>(
     deserializer: D,
@@ -652,12 +652,6 @@ fn scalar(value: &str) -> Result<()> {
     }
     Ok(())
 }
-fn escape(value: &str) -> String {
-    value
-        .replace('\\', "\\\\")
-        .replace('\n', "\\n")
-        .replace('\r', "\\r")
-}
 fn valid_ca_pem(pem: &[u8]) -> bool {
     use rustls::pki_types::pem::PemObject;
     let mut roots = rustls::RootCertStore::empty();
@@ -672,7 +666,7 @@ fn valid_ca_pem(pem: &[u8]) -> bool {
     !roots.is_empty()
 }
 impl SpiceConfig {
-    pub fn file_text(&self) -> Result<Secret> {
+    pub(crate) fn validate(&self) -> Result<()> {
         if self.kind != "spice" {
             return Err(failure("SPICE : type de console invalide."));
         }
@@ -695,28 +689,7 @@ impl SpiceConfig {
         if ca.len() > 262_144 || !valid_ca_pem(ca.as_bytes()) {
             return Err(failure("SPICE : certificat CA invalide."));
         }
-        // Only allowlisted fields reach remote-viewer. Never pass server-provided commands,
-        // arbitrary file paths, redirection options or TLS-verification overrides.
-        Ok(Zeroizing::new(format!(
-            "[virt-viewer]\ntype=spice\nhost={}\nproxy={}\nsecure-channels=all\ntls-port={}\nhost-subject={}\nca={}\npassword={}\ndelete-this-file=1\n",
-            escape(&self.host),
-            escape(&self.proxy),
-            self.tls_port,
-            escape(&self.subject),
-            escape(&ca),
-            escape(&self.password)
-        )))
-    }
-    pub fn launch(&self, program: &std::path::Path) -> Result<crate::connections::rdp::RdpSession> {
-        let text = self.file_text()?;
-        let file = crate::connections::secret_file::create(".vv", text.as_bytes())?;
-        let mut client = crate::connections::rdp::RdpSession::launch_external(
-            program,
-            vec![file.path().to_string_lossy().into_owned()],
-            "SPICE",
-        )?;
-        client.retain_credential_file(file);
-        Ok(client)
+        Ok(())
     }
 }
 

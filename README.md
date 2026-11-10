@@ -16,7 +16,7 @@ Gestionnaire desktop en Rust natif (egui/eframe), conçu pour Windows et Linux.
 ## Nouveautés de la bêta 0.9
 
 - Choix de résolution avant une connexion MSTSC/FreeRDP.
-- Serveurs Proxmox dépliables et VM dans le panneau latéral, avec consoles SPICE via remote-viewer externe. Installation du client, certificats et droits : [guide Proxmox/SPICE](docs/SPICE_PROXMOX.md).
+- Serveurs Proxmox dépliables et VM dans le panneau latéral, avec consoles SPICE intégrées dans les onglets via libspice-client-glib. Installation du client, certificats et droits : [guide Proxmox/SPICE](docs/SPICE_PROXMOX.md).
 
 ## Langues prises en charge
 
@@ -67,7 +67,7 @@ RDP intégré avec RD Gateway/RDS, import `.rdp`, plein écran et choix du clien
 
 ### Hyper-V, actions Proxmox et LXC
 
-Le panneau Proxmox / Hyper-V affiche les machines et leur état. Le clic droit permet de démarrer, arrêter proprement, redémarrer ou couper l’alimentation, avec confirmation. Les conteneurs LXC ouvrent leur console terminal Proxmox dans un onglet, sans SSH ni IP du conteneur. Hyper-V prend en charge les hôtes et clusters via WinRM : sous Windows avec VMConnect ; sous Linux avec WinRM natif Rust et FreeRDP externe. Python/pypsrp n’est plus nécessaire depuis la bêta 0.9.0-beta.3.
+Le panneau Proxmox / Hyper-V affiche les machines et leur état. Le clic droit permet de démarrer, arrêter proprement, redémarrer ou couper l’alimentation, avec confirmation. Les conteneurs LXC ouvrent leur console terminal Proxmox dans un onglet, sans SSH ni IP du conteneur. Hyper-V prend en charge les hôtes et clusters via WinRM : sous Windows avec VMConnect ; sous Linux avec WinRM natif Rust HTTP/HTTPS et FreeRDP externe. Python/pypsrp n’est plus nécessaire depuis la bêta 0.9.0-beta.3.
 
 Voir le [guide de configuration Hyper-V / Proxmox / LXC](docs/HYPERV_PROXMOX.md) pour les droits, certificats, clients et limites.
 

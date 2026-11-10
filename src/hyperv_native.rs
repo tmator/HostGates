@@ -1,4 +1,4 @@
-//! The subset HostGates needs: HTTPS/NTLM WinRM, fixed PowerShell commands,
+//! The subset HostGates needs: HTTP(S)/NTLM WinRM, fixed PowerShell commands,
 //! JSON inventory and bounded execution. No Python or local PowerShell process.
 use super::failure;
 use crate::{
@@ -6,7 +6,9 @@ use crate::{
     proxmox::{Server, Vm, VmKind},
 };
 use std::time::{Duration, Instant};
-use winrm_rs::{AuthMethod, WinrmClient, WinrmConfig, WinrmCredentials, WinrmError};
+use winrm_rs::{
+    AuthMethod, EncryptionMode, WinrmClient, WinrmConfig, WinrmCredentials, WinrmError,
+};
 
 const LIMIT: usize = 4 * 1024 * 1024;
 const CLUSTER: &str = include_str!("hyperv_cluster.ps1");
@@ -26,13 +28,19 @@ fn credentials(identity: &str, secret: &str) -> WinrmCredentials {
 
 fn client(server: &Server, secret: &str) -> Result<WinrmClient> {
     let url = url::Url::parse(&server.url).map_err(|_| failure("Hyper-V : URL invalide."))?;
-    if url.scheme() != "https" {
-        return Err(failure("Hyper-V natif : HTTPS est requis."));
+    if !matches!(url.scheme(), "http" | "https") {
+        return Err(failure("Hyper-V natif : HTTP ou HTTPS est requis."));
     }
+    let tls = url.scheme() == "https";
     let config = WinrmConfig {
-        port: Some(url.port().unwrap_or(5986)),
-        use_tls: true,
-        accept_invalid_certs: server.skip_tls_verification,
+        port: Some(url.port().unwrap_or(if tls { 5986 } else { 5985 })),
+        use_tls: tls,
+        encryption: if tls {
+            EncryptionMode::Auto
+        } else {
+            EncryptionMode::Always
+        },
+        accept_invalid_certs: tls && server.skip_tls_verification,
         auth_method: AuthMethod::Ntlm,
         connect_timeout_secs: 15,
         operation_timeout_secs: 20,
@@ -47,7 +55,7 @@ fn client(server: &Server, secret: &str) -> Result<WinrmClient> {
         .platform_roots(true)
         .log_soap_bodies(false)
         .non_interactive_powershell(true);
-    if !server.skip_tls_verification && !server.ca_file.as_os_str().is_empty() {
+    if tls && !server.skip_tls_verification && !server.ca_file.as_os_str().is_empty() {
         builder = builder.add_root_certificates_pem(&server.ca_file);
     }
     builder.build().map_err(|_| {
@@ -62,7 +70,7 @@ fn remote_error(error: WinrmError) -> crate::error::AppError {
             "Hyper-V : délai dépassé. Une commande distante peut encore se terminer ; actualisez avant de réessayer.",
         ),
         WinrmError::Http(_) => failure(
-            "Hyper-V natif : connexion HTTPS impossible. Vérifiez le réseau, le port WinRM, le certificat CA et le nom DNS.",
+            "Hyper-V natif : connexion WinRM impossible. Vérifiez HTTP/HTTPS, le port, le réseau et, en HTTPS, le certificat.",
         ),
         WinrmError::AuthFailed(_) | WinrmError::Ntlm(_) => failure(
             "Hyper-V natif : authentification NTLM refusée. Vérifiez utilisateur, domaine et politique du serveur.",
@@ -130,8 +138,8 @@ fn run_with(
     let host = url
         .host_str()
         .ok_or_else(|| failure("Hyper-V : hôte absent."))?;
-    if url.scheme() != "https" || !node_valid(host) {
-        return Err(failure("Hyper-V natif : hôte HTTPS invalide."));
+    if !matches!(url.scheme(), "http" | "https") || !node_valid(host) {
+        return Err(failure("Hyper-V natif : hôte WinRM invalide."));
     }
     let nodes: Vec<String> = if server.cluster {
         serde_json::from_slice(&invoke(host, CLUSTER)?)

@@ -658,3 +658,7 @@ Généré le 4 novembre 2026 depuis Cargo.lock (HostGates 0.4.0 + modifications 
 | webpki-root-certs | 1.0.11 | CDLA-Permissive-2.0 |
 | webpki-roots | 1.0.11 | CDLA-Permissive-2.0 |
 | winrm-rs | 2.0.0 | MIT OR Apache-2.0 |
+
+## Moteur SPICE natif optionnel
+
+L’intégration SPICE charge dynamiquement la bibliothèque système `libspice-client-glib` de [spice-gtk](https://www.spice-space.org/spice-gtk.html), sous LGPL-2.1-or-later, et ses dépendances GLib/GObject. HostGates ne les incorpore pas dans son EXE. Les installations VirtViewer et les paquets Linux conservent leurs propres notices et sources. Toute redistribution d’un dossier `spice-runtime` doit inclure les licences et satisfaire les obligations de toutes les bibliothèques qu’il contient. Les déclarations FFI de HostGates utilisent l’API C publique ; le code du moteur SPICE n’est pas recopié dans le projet.

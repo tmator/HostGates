@@ -10,6 +10,22 @@ use std::path::PathBuf;
 fn failure(message: &str) -> AppError {
     AppError::Operation(message.into())
 }
+/// Switch the standard WinRM port, preserving custom ports such as 5895.
+pub fn change_transport(value: &str, tls: bool) -> String {
+    let scheme = if tls { "https" } else { "http" };
+    if let Ok(mut url) = url::Url::parse(value) {
+        let port = url
+            .port()
+            .filter(|p| !matches!(p, 5985 | 5986))
+            .unwrap_or(if tls { 5986 } else { 5985 });
+        let _ = url.set_scheme(scheme);
+        let _ = url.set_port(Some(port));
+        url.to_string().trim_end_matches('/').to_owned()
+    } else {
+        format!("{scheme}://")
+    }
+}
+
 pub fn validate(server: &Server) -> Result<url::Url> {
     let url =
         url::Url::parse(server.url.trim()).map_err(|_| failure("Hyper-V : URL WinRM invalide."))?;
@@ -25,7 +41,7 @@ pub fn validate(server: &Server) -> Result<url::Url> {
         || server.identity.len() > 256
     {
         return Err(failure(
-            "Hyper-V : utilisez https://hote:5986 et un compte DOMAINE\\utilisateur.",
+            "Hyper-V : utilisez http://hote:5985 ou https://hote:5986 et un compte DOMAINE\\utilisateur.",
         ));
     }
     if cfg!(windows)
@@ -38,14 +54,9 @@ pub fn validate(server: &Server) -> Result<url::Url> {
     }
     #[cfg(not(windows))]
     {
-        if url.scheme() != "https" {
-            return Err(failure(
-                "Hyper-V Linux : HTTPS WinRM est requis (port 5986).",
-            ));
-        }
-        for path in std::iter::once(&server.hyperv_freerdp)
-            .chain((!server.skip_tls_verification).then_some(&server.ca_file))
-        {
+        for path in std::iter::once(&server.hyperv_freerdp).chain(
+            (url.scheme() == "https" && !server.skip_tls_verification).then_some(&server.ca_file),
+        ) {
             if !path.as_os_str().is_empty() && (!path.is_absolute() || !path.is_file()) {
                 return Err(failure(
                     "Hyper-V Linux : sélectionnez un chemin absolu existant.",
@@ -287,6 +298,33 @@ fn freerdp_arguments(vm: &Vm, identity: &str) -> Result<Vec<String>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn transport_switch_preserves_custom_ports_and_http_validates() {
+        assert_eq!(
+            change_transport("https://node:5986", false),
+            "http://node:5985"
+        );
+        assert_eq!(
+            change_transport("http://node:5985", true),
+            "https://node:5986"
+        );
+        assert_eq!(
+            change_transport("https://node:5895", false),
+            "http://node:5895"
+        );
+        assert_eq!(
+            change_transport("http://[::1]:5895", true),
+            "https://[::1]:5895"
+        );
+        let server = Server {
+            hyperv: true,
+            name: "Test".into(),
+            url: "http://node:5895".into(),
+            identity: "LAB\\user".into(),
+            ..Default::default()
+        };
+        assert_eq!(validate(&server).expect("HTTP profile").port(), Some(5895));
+    }
     #[cfg(not(windows))]
     #[test]
     fn linux_profile_and_console_keep_secrets_in_stdin() {
@@ -320,7 +358,7 @@ mod tests {
                 .expect("deserialize");
         assert_eq!(restored.hyperv_freerdp, program);
         server.url = "http://node.example:5985".into();
-        assert!(server.validate().is_err());
+        assert!(server.validate().is_ok());
         server.url = "https://node.example:5986".into();
         let vm: Vm = serde_json::from_value(
             serde_json::json!({"vmid":0,"native_id":"aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",

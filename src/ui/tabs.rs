@@ -5,10 +5,31 @@ use crate::{
     models::Protocol,
 };
 pub enum TabClient {
+    EmbeddedSpice(Box<crate::connections::embedded_spice::EmbeddedSpice>),
     EmbeddedRdp(Box<crate::connections::embedded_rdp::EmbeddedRdp>),
     Web,
     Terminal(Box<Terminal>, TerminalView),
     Rdp(RdpSession),
+}
+impl TabClient {
+    fn is_desktop(&self) -> bool {
+        matches!(self, Self::EmbeddedRdp(r) if !r.closed)
+            || matches!(self, Self::EmbeddedSpice(r) if !r.closed)
+    }
+    fn release_input(&mut self) {
+        match self {
+            Self::EmbeddedRdp(r) => r.release_input(),
+            Self::EmbeddedSpice(r) => r.release_input(),
+            _ => {}
+        }
+    }
+    fn show_desktop(&mut self, ui: &mut egui::Ui, interactive: bool) {
+        match self {
+            Self::EmbeddedRdp(r) => r.show(ui, interactive),
+            Self::EmbeddedSpice(r) => r.show(ui, interactive),
+            _ => {}
+        }
+    }
 }
 pub struct SessionTab {
     pub files: Option<crate::connections::native::FileBrowser>,
@@ -23,6 +44,7 @@ impl SessionTab {
         match &self.client {
             TabClient::Web => false,
             TabClient::EmbeddedRdp(r) => r.closed,
+            TabClient::EmbeddedSpice(r) => r.closed,
             TabClient::Terminal(t, _) => t.closed,
             TabClient::Rdp(r) => r.closed,
         }
@@ -77,7 +99,7 @@ impl HostGates {
         let valid = self
             .tabs
             .iter()
-            .any(|t| t.id == id && matches!(&t.client, TabClient::EmbeddedRdp(r) if !r.closed));
+            .any(|t| t.id == id && t.client.is_desktop());
         let shortcut = ui.ctx().input_mut(|i| {
             i.consume_key(
                 egui::Modifiers::CTRL | egui::Modifiers::ALT,
@@ -86,18 +108,14 @@ impl HostGates {
         });
         if !valid || !self.workspace_interactive() || shortcut {
             for tab in &mut self.tabs {
-                if let TabClient::EmbeddedRdp(r) = &mut tab.client {
-                    r.release_input();
-                }
+                tab.client.release_input();
             }
             self.leave_rdp_fullscreen(ui.ctx());
             return false;
         }
         for tab in &mut self.tabs {
-            if tab.id != id
-                && let TabClient::EmbeddedRdp(r) = &mut tab.client
-            {
-                r.release_input();
+            if tab.id != id {
+                tab.client.release_input();
             }
         }
         let mut leave = false;
@@ -110,9 +128,7 @@ impl HostGates {
                         .on_hover_text(crate::i18n::tr("Ctrl+Alt+Entrée"))
                         .clicked();
                 });
-                if let TabClient::EmbeddedRdp(r) = &mut tab.client {
-                    r.show(ui, !leave);
-                }
+                tab.client.show_desktop(ui, !leave);
             }
         });
         if leave {
@@ -536,10 +552,8 @@ impl HostGates {
         self.advanced.visible.truncate(self.advanced.panes);
         let ids = self.advanced.visible.clone();
         for tab in &mut self.tabs {
-            if (!interactive || !ids.contains(&tab.id))
-                && let TabClient::EmbeddedRdp(rdp) = &mut tab.client
-            {
-                rdp.release_input();
+            if !interactive || !ids.contains(&tab.id) {
+                tab.client.release_input();
             }
         }
         let count = ids.len();
@@ -574,9 +588,9 @@ impl HostGates {
                     });
                     if let Some(s)=&tab.session && ui.small_button(crate::i18n::tr("↻")).on_hover_text(tr("Reconnecter / nouvelle connexion")).clicked(){reconnect=Some(s.clone());}
                     if let Some(files)=&mut tab.files && ui.selectable_label(files.open,crate::i18n::tr("SFTP")).clicked(){files.open= !files.open;if files.open&&files.entries.is_empty(){files.send(crate::connections::native::FileAction::List(files.path.clone()));}}
-                    if matches!(&tab.client, TabClient::EmbeddedRdp(r) if !r.closed)
+                    if tab.client.is_desktop()
                         && ui.small_button(tr("Plein écran")).clicked() { fullscreen = Some(id.clone()); }
-                    if ui.small_button(tr("Arrêter")).clicked(){match &mut tab.client{TabClient::Terminal(t,_)=>t.stop(),TabClient::Rdp(r)=>r.stop(),TabClient::EmbeddedRdp(r)=>r.stop(),TabClient::Web=>{}}tab.tunnel=None;tab.files=None;}
+                    if ui.small_button(tr("Arrêter")).clicked(){match &mut tab.client{TabClient::Terminal(t,_)=>t.stop(),TabClient::Rdp(r)=>r.stop(),TabClient::EmbeddedRdp(r)=>r.stop(),TabClient::EmbeddedSpice(r)=>r.stop(),TabClient::Web=>{}}tab.tunnel=None;tab.files=None;}
                 });
                 if let Some(files)=&mut tab.files && files.open {
                     egui::Panel::right(egui::Id::new(("files",id))).default_size((width*0.4).clamp(180.0,300.0)).size_range(150.0..=400.0).resizable(true).show(ui,|ui|super::advanced::files_ui(ui,files));
@@ -585,6 +599,7 @@ impl HostGates {
                     TabClient::Terminal(t,v)=>{if count>1{v.focus=false;}v.show(ui,t,interactive);},
                     TabClient::Rdp(r)=>{ui.heading(tr("Bureau distant RDP / VNC / SPICE"));ui.label(crate::i18n::tr(&r.status));ui.label(tr("Le client distant utilise sa propre fenêtre. Utilisez Alt+Tab pour la retrouver."));},
                     TabClient::EmbeddedRdp(r)=>r.show(ui,interactive),
+                    TabClient::EmbeddedSpice(r)=>r.show(ui,interactive),
                     TabClient::Web=>{ui.heading(tr("Tunnel Web actif"));ui.label(tr("Gardez cet onglet ouvert pendant la navigation. Le fermer arrête le tunnel."));}
                 }
             });

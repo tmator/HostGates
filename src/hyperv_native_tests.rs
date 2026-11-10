@@ -79,10 +79,11 @@ fn native_errors_never_display_server_text_or_secrets() {
     assert_eq!(c.domain, "example.test");
 }
 #[test]
-fn native_client_refuses_plaintext_and_invalid_ca() {
+fn native_client_accepts_sealed_http_and_rejects_invalid_https_ca() {
     let mut server = profile();
     server.url = "http://node:5985".into();
-    assert!(client(&server, "synthetic-secret").is_err());
+    assert!(client(&server, "synthetic-secret").is_ok());
+    server.url = "file:///node".into();
     assert!(run(&server, "synthetic-secret", "list", "").is_err());
     server.url = "https://node:5986".into();
     server.ca_file = "missing-ca.pem".into();
@@ -213,4 +214,93 @@ fn native_https_checks_ca_before_auth_and_refuses_redirects() {
     stop.store(true, Ordering::Relaxed);
     thread.join().expect("native WinRM test fixture");
     assert_eq!(requests.load(Ordering::Relaxed), 2);
+}
+
+#[test]
+fn http_custom_port_seals_soap_and_never_sends_password_in_clear() {
+    use std::{
+        io::{Read, Write},
+        net::TcpListener,
+    };
+    let listener = TcpListener::bind("127.0.0.1:0").expect("HTTP fixture");
+    let port = listener.local_addr().expect("address").port();
+    listener.set_nonblocking(true).expect("nonblocking");
+    let thread = std::thread::spawn(move || {
+        let start = Instant::now();
+        let mut socket = loop {
+            if let Ok((socket, _)) = listener.accept() {
+                break socket;
+            }
+            assert!(
+                start.elapsed() < Duration::from_secs(5),
+                "connection missing"
+            );
+            std::thread::sleep(Duration::from_millis(5));
+        };
+        socket.set_nonblocking(false).expect("blocking request");
+        socket
+            .set_read_timeout(Some(Duration::from_secs(5)))
+            .expect("timeout");
+        for index in 0..3 {
+            let mut header = Vec::new();
+            let mut byte = [0];
+            while !header.ends_with(b"\r\n\r\n") {
+                socket
+                    .read_exact(&mut byte)
+                    .unwrap_or_else(|e| panic!("request {index} header: {e}"));
+                header.push(byte[0]);
+                assert!(header.len() < 65536);
+            }
+            let header = String::from_utf8(header)
+                .expect("HTTP header")
+                .to_ascii_lowercase();
+            assert!(header.starts_with("post /wsman "));
+            let length = header
+                .lines()
+                .find_map(|line| {
+                    line.strip_prefix("content-length:")
+                        .and_then(|v| v.trim().parse::<usize>().ok())
+                })
+                .unwrap_or(0);
+            assert!(length < 65536);
+            let mut body = vec![0; length];
+            socket.read_exact(&mut body).expect("request body");
+            assert!(!String::from_utf8_lossy(&body).contains("synthetic-secret"));
+            if index == 0 {
+                assert_eq!(length, 0, "SOAP must wait for NTLM sealing");
+                socket.write_all(b"HTTP/1.1 401 Unauthorized\r\nWWW-Authenticate: Negotiate TlRMTVNTUAACAAAAAAAAAAAAAAAxgghgMTIzNDU2NzgAAAAAAAAAABoAGgAwAAAAAgAGAEwAQQBCAAEACABUAEUAUwBUAAAAAAA=\r\nContent-Length: 0\r\nConnection: keep-alive\r\n\r\n").expect("challenge");
+            } else if index == 1 {
+                assert_eq!(length, 0, "NTLM authenticate must not carry unsealed SOAP");
+                socket
+                    .write_all(
+                        b"HTTP/1.1 200 OK\r\nContent-Length: 0\r\nConnection: keep-alive\r\n\r\n",
+                    )
+                    .expect("NTLM acceptance");
+            } else {
+                assert!(
+                    header.contains("multipart/encrypted"),
+                    "HTTP SOAP must be encrypted"
+                );
+                assert!(length > 100);
+                assert!(!String::from_utf8_lossy(&body).contains("<s:Envelope"));
+                socket
+                    .write_all(
+                        b"HTTP/1.1 403 Forbidden\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
+                    )
+                    .expect("response");
+            }
+        }
+    });
+    let mut server = profile();
+    server.url = format!("http://127.0.0.1:{port}");
+    server.ca_file = "unused-http-ca.pem".into();
+    server.skip_tls_verification = true;
+    let client = client(&server, "synthetic-secret").expect("HTTP client");
+    let runtime = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .expect("runtime");
+    let result = runtime.block_on(client.create_shell("127.0.0.1"));
+    assert!(result.is_err());
+    thread.join().expect("sealed HTTP assertions");
 }

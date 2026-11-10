@@ -706,8 +706,7 @@ impl HostGates {
                     Operation::Console(vmid) => {
                         let config = api.console(&server, vmid)?;
                         let received = Instant::now();
-                        // The viewer may use a different firewall/proxy route than HostGates.
-                        // Do not block it based on a separate TCP probe.
+                        // Pass a fresh ticket to the native engine, without a separate TCP probe.
                         Ok(Completed::Console(
                             config,
                             format!("{} · VM {vmid}", server.name),
@@ -796,7 +795,9 @@ impl HostGates {
                             "SPICE : ticket expiré, relancez la connexion.".into(),
                         ))
                     } else {
-                        config.launch(&program)
+                        crate::connections::embedded_spice::EmbeddedSpice::new(
+                            config, &program, ctx,
+                        )
                     };
                     match client {
                         Ok(client) => {
@@ -808,7 +809,7 @@ impl HostGates {
                                 session: None,
                                 files: None,
                                 tunnel: None,
-                                client: tabs::TabClient::Rdp(client),
+                                client: tabs::TabClient::EmbeddedSpice(Box::new(client)),
                             });
                         }
                         Err(e) => {
@@ -950,7 +951,16 @@ impl HostGates {
                         if ui.selectable_value(&mut draft.server.hyperv, false, "Proxmox").changed() { draft.server.url = "https://".into(); draft.server.skip_tls_verification = false; }
                         if ui.selectable_value(&mut draft.server.hyperv, true, "Hyper-V").changed() { draft.server.url = "https://".into(); draft.server.skip_tls_verification = false; draft.server.auth = AuthMode::Password; }
                     });
-                    ui.label(if draft.server.hyperv { if cfg!(windows) { "WinRM : https://hote:5986 (HTTP/Kerberos : http://hote:5985)" } else { "WinRM HTTPS : https://hote:5986 (NTLM)" } } else { "URL HTTPS (https://pve.example:8006)" });
+                    if draft.server.hyperv {
+                        let mut tls = !draft.server.url.starts_with("http://");
+                        let previous = tls;
+                        egui::ComboBox::from_label(crate::i18n::tr("Transport WinRM")).selected_text(if tls { "HTTPS" } else { "HTTP" }).show_ui(ui, |ui| {
+                            ui.selectable_value(&mut tls, true, "HTTPS (5986)");
+                            ui.selectable_value(&mut tls, false, "HTTP (5985)");
+                        });
+                        if tls != previous { draft.server.url = crate::hyperv::change_transport(&draft.server.url, tls); }
+                        ui.label("WinRM : http://hote:5985 / https://hote:5986");
+                    } else { ui.label("URL HTTPS (https://pve.example:8006)"); }
                     ui.text_edit_singleline(&mut draft.server.url);
                     if !draft.server.hyperv { ui.horizontal(|ui| {
                         ui.selectable_value(
@@ -979,8 +989,9 @@ impl HostGates {
                         &mut draft.save,
                         crate::i18n::tr("Enregistrer dans le coffre"),
                     );
-                    ui.checkbox(&mut draft.server.skip_tls_verification, crate::i18n::tr("Ne pas vérifier le certificat HTTPS"));
-                    if draft.server.skip_tls_verification {
+                    let uses_tls = !draft.server.hyperv || !draft.server.url.starts_with("http://");
+                    ui.add_enabled_ui(uses_tls, |ui| { ui.checkbox(&mut draft.server.skip_tls_verification, crate::i18n::tr("Ne pas vérifier le certificat HTTPS")); });
+                    if uses_tls && draft.server.skip_tls_verification {
                         ui.colored_label(ui.visuals().warn_fg_color, crate::i18n::tr("Attention : l’identité du serveur n’est plus vérifiée. Vos identifiants peuvent être interceptés. Le certificat CA configuré est ignoré."));
                     }
                     if draft.server.hyperv {
@@ -992,13 +1003,13 @@ impl HostGates {
                         }
                         #[cfg(not(windows))]
                         {
-                        ui.small(crate::i18n::tr("Linux : WinRM HTTPS natif et FreeRDP. Aucun Python requis. Consultez l’aide Hyper-V."));
+                        ui.small(crate::i18n::tr("Linux : WinRM HTTP/HTTPS natif et FreeRDP. En HTTP, les messages sont chiffrés avec NTLM."));
                         program_picker(ui, "FreeRDP (Hyper-V)", &mut draft.server.hyperv_freerdp);
-                        ui.add_enabled_ui(!draft.server.skip_tls_verification, |ui| { program_picker(ui, &crate::i18n::tr("Certificat CA PEM (facultatif)"), &mut draft.server.ca_file); });
+                        ui.add_enabled_ui(uses_tls && !draft.server.skip_tls_verification, |ui| { program_picker(ui, &crate::i18n::tr("Certificat CA PEM (facultatif)"), &mut draft.server.ca_file); });
                         }
 
                     } else {
-                    ui.add_enabled_ui(!draft.server.skip_tls_verification, |ui| {
+                    ui.add_enabled_ui(uses_tls && !draft.server.skip_tls_verification, |ui| {
                     ui.label(crate::i18n::tr("Certificat CA PEM (facultatif)"));
                     ui.horizontal(|ui| {
                         ui.label(draft.server.ca_file.display().to_string());

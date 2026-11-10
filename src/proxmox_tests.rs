@@ -75,23 +75,20 @@ fn vm_inventory_includes_containers_and_checks_node_paths() {
 }
 
 #[test]
-fn spice_files_require_tls_and_cannot_inject_viewer_options() {
+fn spice_config_requires_valid_tls_and_rejects_control_characters() {
     let cert = rcgen::generate_simple_self_signed(vec!["localhost".into()]).unwrap();
     let original = configuration(&cert.cert.pem());
     let config: SpiceConfig = serde_json::from_value(original.clone()).unwrap();
-    let text = config.file_text().unwrap();
-    assert!(!text.lines().any(|line| line.starts_with("port=")));
-    assert!(text.contains("\nsecure-channels=all\ntls-port=61000\nhost-subject=CN=pve\n"));
-    assert!(text.contains("\npassword=synthetic-password\ndelete-this-file=1\n"));
-    assert!(!text.contains("untrusted-command"));
-    assert!(!text.contains("tls-ciphers"));
+    assert!(config.validate().is_ok());
+    assert_eq!(config.tls_port, 61000);
+    assert_eq!(config.subject, "CN=pve");
     for field in ["host", "password", "host-subject", "proxy"] {
         let mut bad = original.clone();
         bad[field] = json!("value\ndisable-channels=main");
         assert!(
             serde_json::from_value::<SpiceConfig>(bad)
                 .unwrap()
-                .file_text()
+                .validate()
                 .is_err()
         );
     }
@@ -100,7 +97,7 @@ fn spice_files_require_tls_and_cannot_inject_viewer_options() {
     assert!(
         serde_json::from_value::<SpiceConfig>(bad)
             .unwrap()
-            .file_text()
+            .validate()
             .is_err()
     );
     let mut bad = original;
@@ -251,7 +248,7 @@ fn https_token_auth_refreshes_migrated_node_and_fetches_new_console_ticket() {
     assert!(mock.ca.contains("BEGIN CERTIFICATE"));
     let api = Api::login(&mock.server, "synthetic-token").unwrap();
     for _ in 0..2 {
-        assert!(api.console(&mock.server, 100).unwrap().file_text().is_ok());
+        assert!(api.console(&mock.server, 100).unwrap().validate().is_ok());
     }
     let requests = mock.thread.join().unwrap();
     assert_eq!(requests.len(), 6);

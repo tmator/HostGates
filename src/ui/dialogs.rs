@@ -67,14 +67,14 @@ impl HostGates {
                 ui.heading(crate::i18n::tr("Applications externes"));
                 ui.label(crate::i18n::tr("Champ vide : recherche automatique dans PATH. Sinon, chemin absolu de l’exécutable, sans guillemets ni arguments."));
                 ui.add_enabled_ui(!self.busy, |ui| {
-                    for (label, value) in [("SPICE (remote-viewer)", &mut programs.spice), ("SSH (OpenSSH)", &mut programs.ssh), (if cfg!(windows) { "RDP (mstsc)" } else { "RDP (FreeRDP)" }, &mut programs.rdp), ("VNC (TigerVNC ou compatible hôte::port)", &mut programs.vnc), ("Terminal local", &mut programs.terminal)] {
+                    for (label, value) in [("SPICE (bibliothèque native / ancien remote-viewer)", &mut programs.spice), ("SSH (OpenSSH)", &mut programs.ssh), (if cfg!(windows) { "RDP (mstsc)" } else { "RDP (FreeRDP)" }, &mut programs.rdp), ("VNC (TigerVNC ou compatible hôte::port)", &mut programs.vnc), ("Terminal local", &mut programs.terminal)] {
                         ui.label(crate::i18n::tr(label));
                         ui.horizontal(|ui| {
                             if ui.add(egui::TextEdit::singleline(value).desired_width(460.0).hint_text(crate::i18n::tr("Automatique (PATH)"))).changed() { self.programs_check = None; }
                             if ui.button(crate::i18n::tr("Parcourir…")).clicked() {
                                 let picker = rfd::FileDialog::new().set_title(crate::i18n::tr("Choisir l’exécutable"));
                                 #[cfg(windows)]
-                                let picker = picker.add_filter("Exécutable", &["exe"]);
+                                let picker = picker.add_filter("Application / bibliothèque", &["exe", "dll"]);
                                 if let Some(path) = picker.pick_file() {
                                     *value = path.to_string_lossy().into_owned(); self.programs_check = None;
                                 }

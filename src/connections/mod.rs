@@ -1,4 +1,5 @@
 pub mod embedded_rdp;
+pub mod embedded_spice;
 pub mod native;
 pub mod rdp;
 pub(crate) mod secret_file;
@@ -97,7 +98,7 @@ impl ProgramKind {
     }
     pub fn label(self) -> &'static str {
         match self {
-            Self::Spice => "SPICE (remote-viewer)",
+            Self::Spice => "SPICE (bibliothèque native)",
             Self::Ssh => "OpenSSH",
             Self::Rdp => "Client RDP",
             Self::Vnc => "Client VNC (TigerVNC)",
@@ -107,6 +108,9 @@ impl ProgramKind {
 }
 pub fn resolve_program(configured: &str, kind: ProgramKind) -> crate::error::Result<PathBuf> {
     use crate::error::AppError;
+    if matches!(kind, ProgramKind::Spice) {
+        return embedded_spice::runtime_path(configured);
+    }
     if configured.is_empty() {
         return find_program(kind.defaults()).ok_or_else(|| AppError::Operation(format!(
             "{} introuvable dans PATH. Ouvrez Paramètres > Applications externes et sélectionnez son exécutable. Consultez Aide > Configurer les connexions.", kind.label())));

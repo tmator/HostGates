@@ -1,5 +1,11 @@
 # Journal des versions
 
+## 0.9.0-beta.5 — 10 novembre 2026 (bêta)
+
+- Consoles SPICE Proxmox dans les onglets via libspice-client-glib, clavier/souris, curseur et plein écran ; aucun processus remote-viewer ni fichier .vv. Bibliothèques natives installées séparément.
+- Hyper-V Windows/Linux : choix HTTP/HTTPS et port personnalisé (dont 5895). En HTTP sous Linux, chiffrement obligatoire des messages NTLM.
+- Documentation et dépendances DEB/RPM mises à jour. Première intégration SPICE limitée au premier écran, sans audio, USB ni presse-papiers.
+
 ## 0.9.0-beta.4 — 9 novembre 2026 (bêta)
 
 - SPICE : suppression du test TCP bloquant ajouté en bêta 3 ; remote-viewer effectue directement la connexion.

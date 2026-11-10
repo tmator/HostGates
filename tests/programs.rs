@@ -13,8 +13,14 @@ fn settings_survive_reopen_and_reset() {
         .to_str()
         .expect("test fixture must be valid")
         .to_owned();
+    let library = dir.path().join(if cfg!(windows) {
+        "libspice-client-glib-2.0-8.dll"
+    } else {
+        "libspice-client-glib-2.0.so.8"
+    });
+    std::fs::write(&library, b"path fixture, never loaded").expect("native library path");
     let programs = ExternalPrograms {
-        spice: exe.clone(),
+        spice: library.to_string_lossy().into_owned(),
         ssh: exe.clone(),
         rdp: exe.clone(),
         vnc: exe.clone(),
@@ -114,4 +120,36 @@ fn empty_override_uses_path_lookup() {
             hostgates::connections::find_program(kind.defaults())
         );
     }
+}
+
+#[test]
+fn native_spice_path_accepts_directory_and_legacy_exe_but_never_falls_back() {
+    let dir = tempfile::tempdir().expect("fixture");
+    let library = dir.path().join(if cfg!(windows) {
+        "libspice-client-glib-2.0-8.dll"
+    } else {
+        "libspice-client-glib-2.0.so.8"
+    });
+    std::fs::write(&library, b"never loaded").expect("library path");
+    assert_eq!(
+        resolve_program(dir.path().to_str().expect("path"), ProgramKind::Spice).expect("directory"),
+        library
+    );
+    assert_eq!(
+        resolve_program(library.to_str().expect("path"), ProgramKind::Spice).expect("library"),
+        library
+    );
+    #[cfg(windows)]
+    {
+        let viewer = dir.path().join("remote-viewer.exe");
+        std::fs::write(&viewer, b"never executed").expect("legacy path");
+        assert_eq!(
+            resolve_program(viewer.to_str().expect("path"), ProgramKind::Spice)
+                .expect("legacy profile"),
+            library
+        );
+    }
+    std::fs::remove_file(library).expect("remove fixture");
+    assert!(resolve_program(dir.path().to_str().expect("path"), ProgramKind::Spice).is_err());
+    assert!(resolve_program("relative.dll", ProgramKind::Spice).is_err());
 }

@@ -6,7 +6,7 @@ $global:mockState = 'Running'
 function Import-Module { param($Name,$ErrorAction) }
 function New-PSSessionOption {
     param($OpenTimeout,$OperationTimeout,[switch]$SkipCACheck,[switch]$SkipCNCheck,[switch]$SkipRevocationCheck)
-    $expected = $request.skip_tls_verification -eq $true
+    $expected = $request.skip_tls_verification -eq $true -and ([uri]$request.url).Scheme -eq 'https'
     if ($SkipCACheck.IsPresent -ne $expected -or $SkipCNCheck.IsPresent -ne $expected -or $SkipRevocationCheck.IsPresent -ne $expected) { throw 'TLS exception scope mismatch' }
     @{ }
 }
@@ -15,7 +15,10 @@ function Get-CimInstance { param($ClassName,$ErrorAction) [PSCustomObject]@{Part
 function Invoke-Command {
     param($ComputerName,$Credential,$Authentication,$ErrorAction,[switch]$UseSSL,$Port,$SessionOption,$ScriptBlock,$ArgumentList)
     if ($ComputerName -notin @('node1.example.test','node2.example.test')) { throw 'Unexpected endpoint' }
-    if (-not $UseSSL -or $Port -ne 5986 -or $Authentication -ne 'Negotiate') { throw 'Transport changed' }
+    $expectedUri = [uri]$request.url
+    $expectedTls = $expectedUri.Scheme -eq 'https'
+    $expectedPort = if ($expectedUri.IsDefaultPort) { if ($expectedTls) {5986} else {5985} } else {$expectedUri.Port}
+    if ($UseSSL.IsPresent -ne $expectedTls -or $Port -ne $expectedPort -or $Authentication -ne 'Negotiate') { throw 'Transport changed' }
     $env:COMPUTERNAME = $ComputerName.Split('.')[0]
     & $ScriptBlock @ArgumentList
 }
@@ -39,9 +42,10 @@ function Start-VM {
     $global:mockState = 'Running'
 }
 '@
+foreach ($endpoint in @('https://node1.example.test:5986','http://node1.example.test:5895','http://node1.example.test','https://node1.example.test')) {
 foreach ($skipCertificate in @($false,$true)) {
 foreach ($action in @('list','console','start','shutdown','reboot','stop')) {
-    $payload = @{url='https://node1.example.test:5986'; identity='LAB\tester'; secret="synthetic';throw 'injected"; cluster=$true; skip_tls_verification=$skipCertificate; action=$action; id='bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb'} | ConvertTo-Json -Compress
+    $payload = @{url=$endpoint; identity='LAB\tester'; secret="synthetic';throw 'injected"; cluster=$true; skip_tls_verification=$skipCertificate; action=$action; id='bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb'} | ConvertTo-Json -Compress
     $result = $payload | & "$env:SystemRoot/System32/WindowsPowerShell/v1.0/powershell.exe" -NoLogo -NoProfile -NonInteractive -Command ($mock + "`n" + $adapter)
     if ($LASTEXITCODE -ne 0) { throw "Mock failed: $action" }
     $rows = $result | ConvertFrom-Json
@@ -49,6 +53,8 @@ foreach ($action in @('list','console','start','shutdown','reboot','stop')) {
         if ($rows.Count -ne 2) { throw ("Missing cluster VMs: " + $result) }
     } elseif ($rows.Count -ne 1 -or $rows[0].node -ne 'node2.example.test') { throw 'Owner resolution failed' }
     Write-Output "PASS Hyper-V mock $action"
+}
+
 }
 
 }

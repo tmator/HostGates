@@ -19,7 +19,7 @@ Les machines sont ciblées par leur GUID. HostGates relit l’inventaire avant l
 
 ## Hyper-V depuis Linux
 
-Le même profil et les mêmes actions sont disponibles sous Linux. Le transport **WinRM est intégré en Rust**, avec `winrm-rs 2.0.0` : aucun Python, pypsrp ou PowerShell local n’est nécessaire. Ce remplacement couvre les opérations HostGates (inventaire, clusters, alimentation), pas toute l’API pypsrp. Il utilise WinRS pour exécuter les scripts PowerShell fixes sur les hôtes Windows. **NTLM sur HTTPS uniquement** : les domaines interdisant NTLM ne sont pas encore pris en charge sous Linux.
+Le même profil et les mêmes actions sont disponibles sous Linux. Le transport **WinRM est intégré en Rust**, avec `winrm-rs 2.0.0` : aucun Python, pypsrp ou PowerShell local n’est nécessaire. Ce remplacement couvre les opérations HostGates (inventaire, clusters, alimentation), pas toute l’API pypsrp. Il utilise WinRS pour exécuter les scripts PowerShell fixes sur les hôtes Windows. **NTLM sur HTTP ou HTTPS** : les domaines interdisant NTLM ne sont pas encore pris en charge sous Linux.
 
 ### Dépendances du poste
 
@@ -29,9 +29,9 @@ Dans **Modifier le serveur → Hyper-V**, sélectionner `xfreerdp3` ou `xfreerdp
 
 ### Configuration des hôtes
 
-- WinRM **HTTPS**, généralement `https://hv01.example.test:5986`, doit être configuré sur chaque nœud avec un certificat dont le nom correspond au DNS utilisé. HTTP est refusé par l’adaptateur Linux.
+- WinRM **HTTPS** est conseillé, généralement `https://hv01.example.test:5986`, doit être configuré sur chaque nœud avec un certificat dont le nom correspond au DNS utilisé. Le menu **Transport WinRM** permet aussi HTTP, habituellement `http://hv01.example.test:5985`. Le port reste libre : saisir `http://hv01.example.test:5895` si votre écouteur utilise 5895. Un changement de transport adapte seulement les ports standard 5985/5986 et préserve les ports personnalisés.
 - Renseigner `DOMAINE\utilisateur`, `utilisateur@domaine` ou `HOTE\utilisateur` pour un compte local. Le service WinRM doit autoriser les shells distants WinRS et PowerShell. Le compte doit disposer des droits WinRM et Hyper-V ; les mêmes modules serveur que sous Windows sont nécessaires.
-- Pour une autorité privée, choisir le fichier **Certificat CA PEM** dans le profil. Ce fichier concerne WinRM, et s’applique à chaque nœud du cluster. La case **Ne pas vérifier le certificat HTTPS** ignore explicitement les erreurs de certificat et le fichier CA pour ce profil, sur tous ses nœuds. L’identité du serveur n’est alors plus vérifiée ; les identifiants peuvent être interceptés. HTTPS reste obligatoire sous Linux. Cette exception concerne WinRM, pas le certificat de la console FreeRDP.
+- Pour une autorité privée, choisir le fichier **Certificat CA PEM** dans le profil. Ce fichier concerne WinRM, et s’applique à chaque nœud du cluster. La case **Ne pas vérifier le certificat HTTPS** ignore explicitement les erreurs de certificat et le fichier CA pour ce profil, sur tous ses nœuds. L’identité du serveur n’est alors plus vérifiée ; les identifiants peuvent être interceptés. En HTTP, les options de certificat sont inactives et les messages SOAP sont obligatoirement signés/chiffrés par NTLM (sealing). Ne pas activer Basic ni AllowUnencrypted. HTTPS vérifié reste préférable pour authentifier le serveur. Cette exception concerne WinRM, pas le certificat de la console FreeRDP.
 - Autoriser l’accès au port **2179** du nœud pour la console VMConnect/FreeRDP et les droits de console Hyper-V du compte. Le certificat de ce service est distinct de celui de WinRM : FreeRDP utilise son magasin de confiance/système. Faire approuver ce certificat par l’administrateur ; le CA WinRM du profil n’est pas transmis à FreeRDP. Les certificats non approuvés sont refusés sans acceptation automatique.
 - En cluster, tous les nœuds doivent être accessibles directement, avec le même compte et port WinRM. HostGates inventorie les nœuds depuis le poste Linux, sans déléguer le mot de passe d’un hôte vers un autre. L’hôte propriétaire est relu avant une console ou une action. Une migration pendant l’opération peut encore imposer une actualisation.
 

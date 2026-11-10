@@ -338,6 +338,7 @@ impl eframe::App for HostGates {
                 tabs::TabClient::Terminal(t, _) => t.poll(),
                 tabs::TabClient::Rdp(r) => r.poll(),
                 tabs::TabClient::EmbeddedRdp(r) => r.poll(&ctx),
+                tabs::TabClient::EmbeddedSpice(r) => r.poll(&ctx),
                 tabs::TabClient::Web => {}
             }
         }
