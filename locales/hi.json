@@ -395,7 +395,5 @@
   "Linux : WinRM HTTPS natif et FreeRDP. Aucun Python requis. Consultez l’aide Hyper-V.": "Linux: अंतर्निहित WinRM HTTPS और FreeRDP। Python आवश्यक नहीं है। Hyper-V सहायता देखें।",
   "Linux : WinRM HTTP/HTTPS natif et FreeRDP. En HTTP, les messages sont chiffrés avec NTLM.": "Linux: मूल HTTP/HTTPS WinRM और FreeRDP। HTTP संदेश NTLM से एन्क्रिप्ट किए जाते हैं।",
   "SPICE (bibliothèque native / ancien remote-viewer)": "SPICE (मूल लाइब्रेरी / पुराना remote-viewer)",
-  "Transport WinRM": "WinRM ट्रांसपोर्ट",
-  "Diagnostic de connexion": "कनेक्शन निदान",
-  "Copier le diagnostic": "निदान कॉपी करें"
+  "Transport WinRM": "WinRM ट्रांसपोर्ट"
 }

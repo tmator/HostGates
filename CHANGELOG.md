@@ -1,5 +1,13 @@
 # Journal des versions
 
+## 0.9.0 — 11 novembre 2026
+
+Le support de SPICE est ajouté sur Windows et Linux. Les consoles des VM Proxmox s’ouvrent dans un onglet HostGates, avec le clavier, la souris et le plein écran. Un affichage SPICE doit être configuré pour la VM. Sous Windows, installer les bibliothèques Virt Viewer de même architecture que HostGates. Le DEB installe libspice-client-glib. Le RPM la recommande. Sur les distributions où elle est absente, les consoles SPICE nécessitent son installation séparée.
+
+Le support Hyper-V est toujours **en développement**, notamment la connexion WinRM depuis Linux.
+
+Le panneau de diagnostic SPICE et les diagnostics NTLM de la bêta 6 ont été retirés. Les erreurs de connexion restent affichées.
+
 ## 0.9.0-beta.6 — 10 novembre 2026 (bêta de diagnostic)
 
 - SPICE : diagnostic copiable avec proxy, canal et code réseau natif, sans ticket ni mot de passe.

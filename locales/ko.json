@@ -395,7 +395,5 @@
   "Linux : WinRM HTTPS natif et FreeRDP. Aucun Python requis. Consultez l’aide Hyper-V.": "Linux: 네이티브 WinRM HTTPS 및 FreeRDP. Python은 필요하지 않습니다. Hyper-V 도움말을 참조하세요.",
   "Linux : WinRM HTTP/HTTPS natif et FreeRDP. En HTTP, les messages sont chiffrés avec NTLM.": "Linux: 네이티브 HTTP/HTTPS WinRM 및 FreeRDP. HTTP 메시지는 NTLM으로 암호화됩니다.",
   "SPICE (bibliothèque native / ancien remote-viewer)": "SPICE (네이티브 라이브러리 / 기존 remote-viewer)",
-  "Transport WinRM": "WinRM 전송 방식",
-  "Diagnostic de connexion": "연결 진단",
-  "Copier le diagnostic": "진단 복사"
+  "Transport WinRM": "WinRM 전송 방식"
 }

@@ -126,8 +126,8 @@ URL: https://github.com/tmator/HostGates
 ExclusiveArch: x86_64
 Requires: libX11.so.6()(64bit), libXcursor.so.1()(64bit), libXrandr.so.2()(64bit), libXi.so.6()(64bit)
 Requires: libxkbcommon.so.0()(64bit), libxkbcommon-x11.so.0()(64bit), libwayland-client.so.0()(64bit)
-Requires: libEGL.so.1()(64bit), libGL.so.1()(64bit), xdg-utils, spice-glib
-Recommends: xdg-desktop-portal, gnome-keyring
+Requires: libEGL.so.1()(64bit), libGL.so.1()(64bit), xdg-utils
+Recommends: xdg-desktop-portal, gnome-keyring, libspice-client-glib-2.0.so.8()(64bit)
 
 %description
 Integrated SSH terminal, SFTP, tunnels, encrypted vault and 12 interface languages.

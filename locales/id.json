@@ -395,7 +395,5 @@
   "Linux : WinRM HTTPS natif et FreeRDP. Aucun Python requis. Consultez l’aide Hyper-V.": "Linux: WinRM HTTPS bawaan dan FreeRDP. Python tidak diperlukan. Lihat bantuan Hyper-V.",
   "Linux : WinRM HTTP/HTTPS natif et FreeRDP. En HTTP, les messages sont chiffrés avec NTLM.": "Linux: WinRM HTTP/HTTPS native dan FreeRDP. Pesan HTTP dienkripsi dengan NTLM.",
   "SPICE (bibliothèque native / ancien remote-viewer)": "SPICE (pustaka native / remote-viewer lama)",
-  "Transport WinRM": "Transportasi WinRM",
-  "Diagnostic de connexion": "Diagnostik koneksi",
-  "Copier le diagnostic": "Salin diagnostik"
+  "Transport WinRM": "Transportasi WinRM"
 }

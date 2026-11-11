@@ -72,78 +72,13 @@ fn remote_error(error: WinrmError) -> crate::error::AppError {
         WinrmError::Http(_) => failure(
             "Hyper-V natif : connexion WinRM impossible. Vérifiez HTTP/HTTPS, le port, le réseau et, en HTTPS, le certificat.",
         ),
-        WinrmError::AuthFailed(message) => failure(&auth_diagnostic(&message)),
-        WinrmError::Ntlm(winrm_rs::NtlmError::InvalidMessage(message)) => {
-            failure(&ntlm_diagnostic(&message))
-        }
+        WinrmError::AuthFailed(_) | WinrmError::Ntlm(_) => failure(
+            "Hyper-V natif : authentification NTLM refusée. Vérifiez utilisateur, domaine et politique du serveur.",
+        ),
         _ => failure(
             "Hyper-V natif : opération WinRM refusée. Vérifiez les droits WinRM/Hyper-V et les modules serveur.",
         ),
     }
-}
-
-// Translate only known library-generated categories. Never echo server response bodies,
-// authentication headers, challenge blobs or arbitrary upstream error strings.
-fn auth_diagnostic(message: &str) -> String {
-    if message == "NTLM authentication rejected (bad credentials or CBT mismatch)" {
-        return "Hyper-V [NTLM-AUTH-401] : le serveur a rejeté la réponse d’authentification. Vérifiez le nom NetBIOS du domaine, le compte, le mot de passe et les événements Windows 4625. En HTTPS, vérifier aussi la liaison au certificat (CBT).".into();
-    }
-    if let Some(status) = message
-        .strip_prefix("expected 401 for NTLM negotiate, got ")
-        .and_then(|s| s.split_whitespace().next())
-        .and_then(|s| s.parse::<u16>().ok())
-        .filter(|s| (100..=599).contains(s))
-    {
-        return format!(
-            "Hyper-V [NTLM-NEGOTIATE-HTTP-{status}] : réponse inattendue avant authentification. Vérifiez le port WinRM, /wsman et un éventuel proxy HTTP."
-        );
-    }
-    match message {
-        "missing WWW-Authenticate header in 401"=>"Hyper-V [NTLM-NO-CHALLENGE] : réponse HTTP 401 sans méthode d’authentification. Vérifiez WinRM/Negotiate et le proxy.",
-        "missing Negotiate prefix in challenge"=>"Hyper-V [NTLM-CHALLENGE-SCHEME] : la réponse ne contient pas le défi Negotiate attendu. Vérifiez les méthodes WinRM proposées et les en-têtes du proxy.",
-        _=>"Hyper-V [NTLM-AUTH-PROTOCOL] : échange d’authentification incompatible ; aucun détail serveur sensible n’est affiché.",
-    }.into()
-}
-fn ntlm_diagnostic(message: &str) -> String {
-    for flag in [
-        "NEGOTIATE_UNICODE",
-        "NEGOTIATE_NTLM",
-        "NEGOTIATE_EXTENDED_SESSIONSECURITY",
-        "NEGOTIATE_128",
-        "NEGOTIATE_SIGN",
-        "NEGOTIATE_SEAL",
-        "NEGOTIATE_KEY_EXCH",
-    ] {
-        if message == format!("NTLM Type 2: the server did not negotiate {flag}") {
-            return format!(
-                "Hyper-V [NTLM-FLAG-{flag}] : le serveur ne propose pas cette capacité NTLM requise. La réponse d’authentification n’a pas été envoyée. Vérifiez les politiques NTLM/signature/chiffrement ; ne désactivez pas le chiffrement HTTP."
-            );
-        }
-    }
-    for field in ["MsvAvNbComputerName", "MsvAvNbDomainName"] {
-        if message == format!("NTLM Type 2: target info has no {field}") {
-            return format!(
-                "Hyper-V [NTLM-TARGET-{field}] : défi serveur incomplet pour le chiffrement WinRM. La réponse d’authentification n’a pas été envoyée."
-            );
-        }
-    }
-    if message.starts_with("NTLM over TLS:") || message.contains("channel binding") {
-        return "Hyper-V [NTLM-CBT] : impossible de lier l’authentification au certificat de cette connexion TLS.".into();
-    }
-    if message.starts_with("HTTP 401 to a sealed NTLM request") {
-        return "Hyper-V [NTLM-SESSION-401] : session authentifiée rejetée lors d’une commande. La commande n’a pas été relancée ; actualisez avant toute nouvelle action.".into();
-    }
-    if message.contains("closed") && message.contains("authentication") {
-        return "Hyper-V [NTLM-CONNECTION-CLOSED] : connexion fermée pendant/après authentification. Vérifiez le maintien de connexion par WinRM ou le proxy.".into();
-    }
-    if message.contains("unsealed")
-        || message.contains("seal")
-        || message.contains("signature")
-        || message.contains("checksum")
-    {
-        return "Hyper-V [NTLM-MESSAGE-INTEGRITY] : réponse chiffrée/signée incompatible ou non vérifiable. Aucune rétrogradation vers des commandes HTTP en clair.".into();
-    }
-    "Hyper-V [NTLM-INVALID-CHALLENGE] : négociation NTLM invalide ou incompatible ; ce message ne prouve pas un mauvais mot de passe.".into()
 }
 
 pub(super) fn run(server: &Server, secret: &str, action: &str, id: &str) -> Result<Vec<Vm>> {

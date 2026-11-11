@@ -473,17 +473,6 @@ impl HostGates {
                     }
                     if let Some(error) = &cache.error {
                         ui.label(crate::i18n::tr(error));
-                        if ui
-                            .small_button(crate::i18n::tr("Copier le diagnostic"))
-                            .clicked()
-                        {
-                            ui.ctx().copy_text(format!(
-                                "HostGates {} / {}\n{}",
-                                env!("CARGO_PKG_VERSION"),
-                                std::env::consts::OS,
-                                error
-                            ));
-                        }
                     }
                     if cache.inventory_stale {
                         ui.small(crate::i18n::tr(

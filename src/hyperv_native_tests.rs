@@ -304,37 +304,3 @@ fn http_custom_port_seals_soap_and_never_sends_password_in_clear() {
     assert!(result.is_err());
     thread.join().expect("sealed HTTP assertions");
 }
-
-#[test]
-fn authentication_diagnostics_separate_rejection_from_protocol_and_hide_secrets() {
-    assert!(
-        auth_diagnostic("NTLM authentication rejected (bad credentials or CBT mismatch)")
-            .contains("NTLM-AUTH-401")
-    );
-    assert!(
-        auth_diagnostic("expected 401 for NTLM negotiate, got 404 Not Found synthetic-secret")
-            .contains("NTLM-NEGOTIATE-HTTP-404")
-    );
-    assert!(
-        ntlm_diagnostic("NTLM Type 2: the server did not negotiate NEGOTIATE_SEAL")
-            .contains("NTLM-FLAG-NEGOTIATE_SEAL")
-    );
-    assert!(
-        ntlm_diagnostic("NTLM Type 2: target info has no MsvAvNbComputerName")
-            .contains("NTLM-TARGET-MsvAvNbComputerName")
-    );
-    assert!(
-        ntlm_diagnostic("HTTP 401 to a sealed NTLM request on an authenticated connection")
-            .contains("NTLM-SESSION-401")
-    );
-    for text in [
-        "synthetic-secret",
-        "missing Negotiate prefix in challenge synthetic-secret",
-        "HTTP 401 secret",
-        "channel binding synthetic-secret",
-        "signature synthetic-secret",
-    ] {
-        assert!(!auth_diagnostic(text).contains("synthetic-secret"));
-        assert!(!ntlm_diagnostic(text).contains("synthetic-secret"));
-    }
-}

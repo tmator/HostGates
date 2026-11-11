@@ -86,14 +86,12 @@ struct Shared {
     state: Mutex<State>,
     input: Mutex<VecDeque<Input>>,
     ctx: egui::Context,
-    started: Instant,
 }
 struct State {
     status: String,
     closed: bool,
     frame: Option<egui::ColorImage>,
     cursor: Option<Cursor>,
-    diagnostics: VecDeque<String>,
 }
 enum Cursor {
     Shape(egui::ColorImage, [f32; 2]),
@@ -101,20 +99,6 @@ enum Cursor {
     Default,
 }
 impl Shared {
-    // Callers supply only fixed messages and allowlisted metadata, never raw native errors.
-    fn diagnostic(&self, message: String) {
-        let mut state = self.state.lock().unwrap_or_else(|e| e.into_inner());
-        if state.diagnostics.len() >= 64 {
-            state.diagnostics.pop_front();
-        }
-        state.diagnostics.push_back(format!(
-            "[{} ms] {message}",
-            self.started.elapsed().as_millis()
-        ));
-        drop(state);
-        self.ctx.request_repaint();
-    }
-
     fn status(&self, text: &str, closed: bool) {
         let mut s = self.state.lock().unwrap_or_else(|e| e.into_inner());
         s.status = text.into();
@@ -156,29 +140,10 @@ impl EmbeddedSpice {
                 closed: false,
                 frame: None,
                 cursor: None,
-                diagnostics: VecDeque::new(),
             }),
             input: Mutex::new(VecDeque::new()),
             ctx: ctx.clone(),
-            started: Instant::now(),
         });
-        let proxy = url::Url::parse(&config.proxy).map_err(|_| error("SPICE : proxy invalide."))?;
-        shared.diagnostic(format!(
-            "HostGates {} / {} / SPICE natif",
-            env!("CARGO_PKG_VERSION"),
-            std::env::consts::OS
-        ));
-        shared.diagnostic(format!(
-            "Proxy : {}://{}:{} ; port TLS cible : {} ; validation CA/sujet active",
-            proxy.scheme(),
-            proxy.host_str().unwrap_or("?"),
-            proxy.port_or_known_default().unwrap_or(0),
-            config.tls_port
-        ));
-        shared.diagnostic(
-            "L’hôte cible opaque, les tickets et les mots de passe sont exclus de ce diagnostic."
-                .into(),
-        );
         native::start(config, path.to_owned(), shared.clone())?;
         Ok(Self {
             shared,
@@ -251,26 +216,6 @@ impl EmbeddedSpice {
     }
     pub fn show(&mut self, ui: &mut egui::Ui, interactive: bool) {
         ui.label(crate::i18n::tr(&self.status));
-        let report = self
-            .shared
-            .state
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .diagnostics
-            .iter()
-            .cloned()
-            .collect::<Vec<_>>()
-            .join("\n");
-        egui::CollapsingHeader::new(crate::i18n::tr("Diagnostic de connexion")).show(ui, |ui| {
-            if ui.button(crate::i18n::tr("Copier le diagnostic")).clicked() {
-                ui.ctx().copy_text(report.clone());
-            }
-            egui::ScrollArea::vertical()
-                .max_height(160.0)
-                .show(ui, |ui| {
-                    ui.monospace(&report);
-                });
-        });
         let Some(texture) = &self.texture else {
             return;
         };
